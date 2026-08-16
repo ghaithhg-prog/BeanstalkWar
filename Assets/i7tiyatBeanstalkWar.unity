@@ -271,7 +271,7 @@ MonoBehaviour:
   - 0
   - 15
   - 25
-  - 28
+  - 28.5
   spiralConnector: {fileID: 838068927}
 --- !u!4 &131014318
 Transform:
@@ -490,6 +490,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 227272665}
+  - component: {fileID: 227272666}
+  - component: {fileID: 227272667}
   m_Layer: 0
   m_Name: TreePivot
   m_TagString: Untagged
@@ -516,6 +518,48 @@ Transform:
   - {fileID: 838068926}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &227272666
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 227272664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 192321538
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  m_InScenePlaced: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &227272667
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 227272664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19348654cd575d546a77c7c7f1912d8e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkTreeState
+  ShowTopMostFoldoutHeaderGroup: 1
+  tree: {fileID: 1186601247}
+  growthSpeed: 0.5
+  maxHeight: 29
 --- !u!1 &316337430
 GameObject:
   m_ObjectHideFlags: 0
@@ -1364,7 +1408,7 @@ Transform:
   m_GameObject: {fileID: 871609921}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -12.18565, y: 35, z: 19.77734}
+  m_LocalPosition: {x: -12.18565, y: 40, z: 19.77734}
   m_LocalScale: {x: 12, y: 0.7, z: 12}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1756,8 +1800,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TreeGrowth
   healthBarFill: {fileID: 316337431}
-  growthSpeed: 0.5
-  maxHeight: 28
+  growthSpeed: 0
+  maxHeight: 29
   shakeDuration: 2
   shakeAmount: 0.1
   maxHealth: 200
