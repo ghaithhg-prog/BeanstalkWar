@@ -3,7 +3,6 @@ using Unity.Netcode;
 
 public class PlayerMovement : NetworkBehaviour
 {
-
     private bool jumpButtonPressed = false;
     private int jumpCount = 0;
     private int maxJumps = 1;
@@ -20,6 +19,7 @@ public class PlayerMovement : NetworkBehaviour
     public float walkSpeed = 6f;
     public float runSpeed = 10f;
     public float climbSpeedMultiplier = 1.4f;
+
     private bool isOnClimbPath = false;
 
     public SimpleJoystick joystick;
@@ -28,123 +28,228 @@ public class PlayerMovement : NetworkBehaviour
 
     private Rigidbody rb;
 
+    // =========================
+    // Network Spawn
+    // =========================
+
     public override void OnNetworkSpawn()
     {
-        // ✅ إذا لم يكن هذا الـ Player الخاص بنا نوقف الكاميرا
-        if (!IsOwner)
+        // السيرفر فقط يختار مكان ظهور اللاعب
+        if (IsServer && SpawnManager.Instance != null)
         {
-            // نوقف الكاميرا عن تتبع Players الآخرين
-            return;
+            Transform spawnPoint =
+                SpawnManager.Instance.GetSpawnPoint(team);
+
+            if (spawnPoint != null)
+            {
+                transform.position = spawnPoint.position;
+                transform.rotation = spawnPoint.rotation;
+            }
         }
     }
+
+    // =========================
+    // Start
+    // =========================
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        rb.constraints = RigidbodyConstraints.FreezeRotationX | 
-                        RigidbodyConstraints.FreezeRotationZ;
 
-        CharacterCombat combat = GetComponent<CharacterCombat>();
-        if (combat != null && combat.characterData != null)
+        rb.constraints =
+            RigidbodyConstraints.FreezeRotationX |
+            RigidbodyConstraints.FreezeRotationZ;
+
+        CharacterCombat combat =
+            GetComponent<CharacterCombat>();
+
+        if (combat != null &&
+            combat.characterData != null)
         {
-            jumpForce = combat.characterData.jumpForce;
-            maxJumps = combat.characterData.canDoubleJump ? 2 : 1;
+            jumpForce =
+                combat.characterData.jumpForce;
+
+            maxJumps =
+                combat.characterData.canDoubleJump ? 2 : 1;
         }
     }
 
+    // =========================
+    // Update
+    // =========================
+
     void Update()
     {
-        // ✅ فقط اللاعب صاحب هذا الـ Object يتحكم فيه
-        if (!IsOwner) return;
+        // كل جهاز يتحكم فقط في لاعبه
+        if (!IsOwner)
+            return;
 
         Move();
         Jump();
         RotateWithMouse();
     }
 
+    // =========================
+    // Rotation
+    // =========================
+
     void RotateWithMouse()
     {
-        float mouseX = Input.GetAxis("Mouse X");
-        transform.Rotate(Vector3.up * mouseX * 200f * Time.deltaTime);
+        float mouseX =
+            Input.GetAxis("Mouse X");
+
+        transform.Rotate(
+            Vector3.up *
+            mouseX *
+            200f *
+            Time.deltaTime
+        );
     }
+
+    // =========================
+    // Movement
+    // =========================
 
     void Move()
-{
-    float h = Input.GetAxis("Horizontal");
-    float v = Input.GetAxis("Vertical");
-
-    // ✅ أولوية للجويستيك
-    if (joystick != null && 
-       (Mathf.Abs(joystick.Horizontal) > 0.01f || 
-        Mathf.Abs(joystick.Vertical) > 0.01f))
     {
-        h = joystick.Horizontal;
-        v = joystick.Vertical;
-    }
+        float h =
+            Input.GetAxis("Horizontal");
 
-    Vector3 inputDirection = new Vector3(h, 0, v).normalized;
+        float v =
+            Input.GetAxis("Vertical");
 
-    if (inputDirection.magnitude >= 0.1f)
-    {
-        Vector3 cameraForward = Camera.main.transform.forward;
-        Vector3 cameraRight = Camera.main.transform.right;
+        // أولوية للجويستيك على الهاتف
+        if (joystick != null &&
+            (Mathf.Abs(joystick.Horizontal) > 0.01f ||
+             Mathf.Abs(joystick.Vertical) > 0.01f))
+        {
+            h = joystick.Horizontal;
+            v = joystick.Vertical;
+        }
 
-        cameraForward.y = 0;
-        cameraRight.y = 0;
+        Vector3 inputDirection =
+            new Vector3(h, 0f, v).normalized;
+
+        if (inputDirection.magnitude < 0.1f)
+            return;
+
+        if (Camera.main == null)
+            return;
+
+        Vector3 cameraForward =
+            Camera.main.transform.forward;
+
+        Vector3 cameraRight =
+            Camera.main.transform.right;
+
+        cameraForward.y = 0f;
+        cameraRight.y = 0f;
+
         cameraForward.Normalize();
         cameraRight.Normalize();
 
-        Vector3 moveDirection = cameraForward * v + cameraRight * h;
+        Vector3 moveDirection =
+            cameraForward * v +
+            cameraRight * h;
 
-        float currentSpeed = Input.GetKey(KeyCode.LeftShift) ? 
-                            runSpeed : walkSpeed;
+        moveDirection.Normalize();
+
+        float currentSpeed =
+            Input.GetKey(KeyCode.LeftShift)
+            ? runSpeed
+            : walkSpeed;
 
         if (isOnClimbPath)
             currentSpeed *= climbSpeedMultiplier;
 
-        rb.MovePosition(transform.position + 
-                       moveDirection * currentSpeed * Time.deltaTime);
+        rb.MovePosition(
+            transform.position +
+            moveDirection *
+            currentSpeed *
+            Time.deltaTime
+        );
 
-        Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-        transform.rotation = Quaternion.Slerp(
-            transform.rotation, targetRotation, 10f * Time.deltaTime);
-    }
-}
-
-   void Jump()
-{
-    bool doJump = Input.GetKeyDown(KeyCode.Space) || jumpButtonPressed;
-    jumpButtonPressed = false;
-
-    if (doJump)
-    {
-        if (jumpCount < maxJumps)
+        if (moveDirection != Vector3.zero)
         {
-            rb.linearVelocity = new Vector3(
-                rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            jumpCount++;
+            Quaternion targetRotation =
+                Quaternion.LookRotation(
+                    moveDirection
+                );
+
+            transform.rotation =
+                Quaternion.Slerp(
+                    transform.rotation,
+                    targetRotation,
+                    10f * Time.deltaTime
+                );
         }
     }
-}
 
-  public void OnJumpButtonPressed()
-{
-    jumpButtonPressed = true;
-}
+    // =========================
+    // Jump
+    // =========================
 
-    void OnCollisionEnter(Collision collision)
+    void Jump()
     {
-        if (collision.gameObject.CompareTag("Ground"))
-            jumpCount = 0;
+        bool doJump =
+            Input.GetKeyDown(KeyCode.Space) ||
+            jumpButtonPressed;
 
-        if (collision.gameObject.layer == LayerMask.NameToLayer("Climb"))
-            isOnClimbPath = true;
+        jumpButtonPressed = false;
+
+        if (!doJump)
+            return;
+
+        if (jumpCount >= maxJumps)
+            return;
+
+        rb.linearVelocity =
+            new Vector3(
+                rb.linearVelocity.x,
+                0f,
+                rb.linearVelocity.z
+            );
+
+        rb.AddForce(
+            Vector3.up * jumpForce,
+            ForceMode.Impulse
+        );
+
+        jumpCount++;
     }
 
-    void OnCollisionExit(Collision collision)
+    // زر القفز للموبايل
+    public void OnJumpButtonPressed()
     {
-        if (collision.gameObject.layer == LayerMask.NameToLayer("Climb"))
+        jumpButtonPressed = true;
+    }
+
+    // =========================
+    // Collision
+    // =========================
+
+    void OnCollisionEnter(
+        Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
+        {
+            jumpCount = 0;
+        }
+
+        if (collision.gameObject.layer ==
+            LayerMask.NameToLayer("Climb"))
+        {
+            isOnClimbPath = true;
+        }
+    }
+
+    void OnCollisionExit(
+        Collision collision)
+    {
+        if (collision.gameObject.layer ==
+            LayerMask.NameToLayer("Climb"))
+        {
             isOnClimbPath = false;
+        }
     }
 }
