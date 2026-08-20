@@ -13,7 +13,22 @@ public class PlayerMovement : NetworkBehaviour
         Destroyer
     }
 
+    [Header("Team")]
     public TeamType team;
+
+    public NetworkVariable<bool> hasSelectedTeam =
+        new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public NetworkVariable<TeamType> networkTeam =
+        new NetworkVariable<TeamType>(
+            TeamType.Destroyer,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
 
     [Header("Movement")]
     public float walkSpeed = 6f;
@@ -29,23 +44,86 @@ public class PlayerMovement : NetworkBehaviour
     private Rigidbody rb;
 
     // =========================
-    // Network Spawn
+    // Network
     // =========================
 
     public override void OnNetworkSpawn()
     {
-        // السيرفر فقط يختار مكان ظهور اللاعب
-        if (IsServer && SpawnManager.Instance != null)
+        networkTeam.OnValueChanged += OnTeamChanged;
+
+        if (hasSelectedTeam.Value)
+            team = networkTeam.Value;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        networkTeam.OnValueChanged -= OnTeamChanged;
+    }
+
+    void OnTeamChanged(
+        TeamType previousTeam,
+        TeamType newTeam)
+    {
+        team = newTeam;
+
+        CharacterCombat combat =
+            GetComponent<CharacterCombat>();
+
+        if (combat != null)
+            combat.team = newTeam;
+    }
+
+    // تستدعيها واجهة اختيار الفريق
+    public void RequestTeam(TeamType requestedTeam)
+    {
+        if (!IsOwner)
+            return;
+
+        RequestTeamRpc(requestedTeam);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestTeamRpc(TeamType requestedTeam)
+    {
+        // لا يسمح للاعب باختيار الفريق أكثر من مرة
+        if (hasSelectedTeam.Value)
+            return;
+
+        networkTeam.Value = requestedTeam;
+        hasSelectedTeam.Value = true;
+
+        team = requestedTeam;
+
+        CharacterCombat combat =
+            GetComponent<CharacterCombat>();
+
+        if (combat != null)
+            combat.team = requestedTeam;
+
+        // السيرفر يختار Spawn الصحيح
+        if (SpawnManager.Instance != null)
         {
             Transform spawnPoint =
-                SpawnManager.Instance.GetSpawnPoint(team);
+                SpawnManager.Instance.GetSpawnPoint(
+                    requestedTeam
+                );
 
             if (spawnPoint != null)
             {
-                transform.position = spawnPoint.position;
-                transform.rotation = spawnPoint.rotation;
+                transform.position =
+                    spawnPoint.position;
+
+                transform.rotation =
+                    spawnPoint.rotation;
             }
         }
+
+        Debug.Log(
+            "Player " +
+            OwnerClientId +
+            " selected " +
+            requestedTeam
+        );
     }
 
     // =========================
@@ -70,7 +148,9 @@ public class PlayerMovement : NetworkBehaviour
                 combat.characterData.jumpForce;
 
             maxJumps =
-                combat.characterData.canDoubleJump ? 2 : 1;
+                combat.characterData.canDoubleJump
+                ? 2
+                : 1;
         }
     }
 
@@ -80,8 +160,11 @@ public class PlayerMovement : NetworkBehaviour
 
     void Update()
     {
-        // كل جهاز يتحكم فقط في لاعبه
         if (!IsOwner)
+            return;
+
+        // لا يتحرك قبل اختيار الفريق
+        if (!hasSelectedTeam.Value)
             return;
 
         Move();
@@ -118,7 +201,6 @@ public class PlayerMovement : NetworkBehaviour
         float v =
             Input.GetAxis("Vertical");
 
-        // أولوية للجويستيك على الهاتف
         if (joystick != null &&
             (Mathf.Abs(joystick.Horizontal) > 0.01f ||
              Mathf.Abs(joystick.Vertical) > 0.01f))
@@ -160,7 +242,8 @@ public class PlayerMovement : NetworkBehaviour
             : walkSpeed;
 
         if (isOnClimbPath)
-            currentSpeed *= climbSpeedMultiplier;
+            currentSpeed *=
+                climbSpeedMultiplier;
 
         rb.MovePosition(
             transform.position +
@@ -218,7 +301,6 @@ public class PlayerMovement : NetworkBehaviour
         jumpCount++;
     }
 
-    // زر القفز للموبايل
     public void OnJumpButtonPressed()
     {
         jumpButtonPressed = true;
@@ -232,9 +314,7 @@ public class PlayerMovement : NetworkBehaviour
         Collision collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
-        {
             jumpCount = 0;
-        }
 
         if (collision.gameObject.layer ==
             LayerMask.NameToLayer("Climb"))
