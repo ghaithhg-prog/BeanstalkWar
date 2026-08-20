@@ -12,10 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7e1af3c5db61ff479286a68bab28f1a, type: 3}
   m_Name: TankData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  characterID: 4
   characterName: 
+  description: 
+  characterIcon: {fileID: 0}
+  role: 1
+  maxPerTeam: 2
   maxHealth: 100
   attackDamage: 20
   attackCooldown: 1
   attackRange: 2.5
   moveSpeed: 6
+  jumpForce: 7
+  canDoubleJump: 0
   attackType: 0

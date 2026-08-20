@@ -220,6 +220,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   ShowTopMostFoldoutHeaderGroup: 1
   team: 1
+  hasSelectedTeam:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  networkTeam:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 1
   walkSpeed: 6
   runSpeed: 10
   climbSpeedMultiplier: 1.4
@@ -256,7 +266,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterCombat
   ShowTopMostFoldoutHeaderGroup: 1
   characterData: {fileID: 11400000, guid: a6f0bb7d0c0785e43828357cb808614d, type: 2}
-  attackType: 1
+  attackType: 0
   attackDamage: 20
   attackCooldown: 1
   attackRange: 2.5
