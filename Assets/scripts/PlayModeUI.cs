@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Unity.Netcode;
 
 public class PlayModeUI : MonoBehaviour
 {
@@ -37,12 +38,17 @@ public class PlayModeUI : MonoBehaviour
         panel.SetActive(false);
     }
 
-    void SelectOffline()
+   void SelectOffline()
+{
+    SelectedMode = PlayMode.Offline;
+
+    Debug.Log("OFFLINE mode selected");
+
+    panel.SetActive(false);
+
+    if (Unity.Netcode.NetworkManager.Singleton != null)
     {
-        SelectedMode = PlayMode.Offline;
-
-        Debug.Log("OFFLINE mode selected");
-
-        panel.SetActive(false);
+        Unity.Netcode.NetworkManager.Singleton.StartHost();
     }
+}
 }
