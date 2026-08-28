@@ -30,6 +30,23 @@ public class PlayerMovement : NetworkBehaviour
             NetworkVariableWritePermission.Server
         );
 
+    [Header("Character Selection")]
+    public CharacterDatabase characterDatabase;
+
+    public NetworkVariable<bool> hasSelectedCharacter =
+        new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public NetworkVariable<int> selectedCharacterID =
+        new NetworkVariable<int>(
+            -1,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
     [Header("Movement")]
     public float walkSpeed = 6f;
     public float runSpeed = 10f;
@@ -50,15 +67,27 @@ public class PlayerMovement : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         networkTeam.OnValueChanged += OnTeamChanged;
+        selectedCharacterID.OnValueChanged += OnCharacterChanged;
 
         if (hasSelectedTeam.Value)
-            team = networkTeam.Value;
+            OnTeamChanged(networkTeam.Value, networkTeam.Value);
+
+        if (hasSelectedCharacter.Value &&
+            selectedCharacterID.Value >= 0)
+        {
+            ApplyCharacter(selectedCharacterID.Value);
+        }
     }
 
     public override void OnNetworkDespawn()
     {
         networkTeam.OnValueChanged -= OnTeamChanged;
+        selectedCharacterID.OnValueChanged -= OnCharacterChanged;
     }
+
+    // =========================
+    // Team
+    // =========================
 
     void OnTeamChanged(
         TeamType previousTeam,
@@ -73,7 +102,6 @@ public class PlayerMovement : NetworkBehaviour
             combat.team = newTeam;
     }
 
-    // تستدعيها واجهة اختيار الفريق
     public void RequestTeam(TeamType requestedTeam)
     {
         if (!IsOwner)
@@ -85,7 +113,6 @@ public class PlayerMovement : NetworkBehaviour
     [Rpc(SendTo.Server)]
     private void RequestTeamRpc(TeamType requestedTeam)
     {
-        // لا يسمح للاعب باختيار الفريق أكثر من مرة
         if (hasSelectedTeam.Value)
             return;
 
@@ -100,7 +127,6 @@ public class PlayerMovement : NetworkBehaviour
         if (combat != null)
             combat.team = requestedTeam;
 
-        // السيرفر يختار Spawn الصحيح
         if (SpawnManager.Instance != null)
         {
             Transform spawnPoint =
@@ -110,20 +136,144 @@ public class PlayerMovement : NetworkBehaviour
 
             if (spawnPoint != null)
             {
-                transform.position =
-                    spawnPoint.position;
-
-                transform.rotation =
-                    spawnPoint.rotation;
+                transform.position = spawnPoint.position;
+                transform.rotation = spawnPoint.rotation;
             }
         }
 
         Debug.Log(
-            "Player " +
-            OwnerClientId +
-            " selected " +
-            requestedTeam
+            "Player " + OwnerClientId +
+            " selected team " + requestedTeam
         );
+    }
+
+    // =========================
+    // Character Selection
+    // =========================
+
+    public void RequestCharacter(int characterID)
+    {
+        if (!IsOwner)
+            return;
+
+        if (!hasSelectedTeam.Value)
+            return;
+
+        RequestCharacterRpc(characterID);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestCharacterRpc(int characterID)
+    {
+        if (hasSelectedCharacter.Value)
+            return;
+
+        if (characterDatabase == null)
+        {
+            Debug.LogError(
+                "CharacterDatabase is not assigned to Player."
+            );
+            return;
+        }
+
+        CharacterData requestedCharacter =
+            characterDatabase.GetCharacter(characterID);
+
+        if (requestedCharacter == null)
+            return;
+
+        // نحسب كم لاعباً من نفس الفريق اختار هذه الشخصية
+        int currentCount = 0;
+
+        PlayerMovement[] players =
+            FindObjectsByType<PlayerMovement>(
+                FindObjectsSortMode.None
+            );
+
+        foreach (PlayerMovement player in players)
+        {
+            if (!player.IsSpawned)
+                continue;
+
+            if (!player.hasSelectedTeam.Value ||
+                !player.hasSelectedCharacter.Value)
+                continue;
+
+            if (player.networkTeam.Value != networkTeam.Value)
+                continue;
+
+            if (player.selectedCharacterID.Value == characterID)
+                currentCount++;
+        }
+
+        // الشخصية ممتلئة
+        if (currentCount >= requestedCharacter.maxPerTeam)
+        {
+            Debug.Log(
+                requestedCharacter.characterName +
+                " reached max players for this team."
+            );
+
+            return;
+        }
+
+        selectedCharacterID.Value = characterID;
+        hasSelectedCharacter.Value = true;
+
+        ApplyCharacter(characterID);
+
+        Debug.Log(
+            "Player " + OwnerClientId +
+            " selected character " +
+            requestedCharacter.characterName
+        );
+    }
+
+    void OnCharacterChanged(
+        int previousID,
+        int newID)
+    {
+        if (newID >= 0)
+            ApplyCharacter(newID);
+    }
+
+    void ApplyCharacter(int characterID)
+    {
+        if (characterDatabase == null)
+            return;
+
+        CharacterData data =
+            characterDatabase.GetCharacter(characterID);
+
+        if (data == null)
+            return;
+
+        CharacterCombat combat =
+            GetComponent<CharacterCombat>();
+
+        Health health =
+            GetComponent<Health>();
+
+        if (combat != null)
+        {
+            combat.characterData = data;
+            combat.attackDamage = data.attackDamage;
+            combat.attackCooldown = data.attackCooldown;
+            combat.attackRange = data.attackRange;
+            combat.attackType = data.attackType;
+            combat.team = team;
+        }
+
+        walkSpeed = data.moveSpeed;
+        moveSpeed = data.moveSpeed;
+        jumpForce = data.jumpForce;
+        maxJumps = data.canDoubleJump ? 2 : 1;
+
+        if (health != null)
+        {
+            health.maxHealth = data.maxHealth;
+            health.currentHealth = data.maxHealth;
+        }
     }
 
     // =========================
@@ -137,21 +287,6 @@ public class PlayerMovement : NetworkBehaviour
         rb.constraints =
             RigidbodyConstraints.FreezeRotationX |
             RigidbodyConstraints.FreezeRotationZ;
-
-        CharacterCombat combat =
-            GetComponent<CharacterCombat>();
-
-        if (combat != null &&
-            combat.characterData != null)
-        {
-            jumpForce =
-                combat.characterData.jumpForce;
-
-            maxJumps =
-                combat.characterData.canDoubleJump
-                ? 2
-                : 1;
-        }
     }
 
     // =========================
@@ -163,8 +298,9 @@ public class PlayerMovement : NetworkBehaviour
         if (!IsOwner)
             return;
 
-        // لا يتحرك قبل اختيار الفريق
-        if (!hasSelectedTeam.Value)
+        // لا يبدأ اللعب حتى يختار الفريق والشخصية
+        if (!hasSelectedTeam.Value ||
+            !hasSelectedCharacter.Value)
             return;
 
         Move();
@@ -178,8 +314,7 @@ public class PlayerMovement : NetworkBehaviour
 
     void RotateWithMouse()
     {
-        float mouseX =
-            Input.GetAxis("Mouse X");
+        float mouseX = Input.GetAxis("Mouse X");
 
         transform.Rotate(
             Vector3.up *
@@ -195,11 +330,8 @@ public class PlayerMovement : NetworkBehaviour
 
     void Move()
     {
-        float h =
-            Input.GetAxis("Horizontal");
-
-        float v =
-            Input.GetAxis("Vertical");
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
 
         if (joystick != null &&
             (Mathf.Abs(joystick.Horizontal) > 0.01f ||
@@ -242,8 +374,7 @@ public class PlayerMovement : NetworkBehaviour
             : walkSpeed;
 
         if (isOnClimbPath)
-            currentSpeed *=
-                climbSpeedMultiplier;
+            currentSpeed *= climbSpeedMultiplier;
 
         rb.MovePosition(
             transform.position +
@@ -255,9 +386,7 @@ public class PlayerMovement : NetworkBehaviour
         if (moveDirection != Vector3.zero)
         {
             Quaternion targetRotation =
-                Quaternion.LookRotation(
-                    moveDirection
-                );
+                Quaternion.LookRotation(moveDirection);
 
             transform.rotation =
                 Quaternion.Slerp(
@@ -280,10 +409,7 @@ public class PlayerMovement : NetworkBehaviour
 
         jumpButtonPressed = false;
 
-        if (!doJump)
-            return;
-
-        if (jumpCount >= maxJumps)
+        if (!doJump || jumpCount >= maxJumps)
             return;
 
         rb.linearVelocity =
@@ -310,8 +436,7 @@ public class PlayerMovement : NetworkBehaviour
     // Collision
     // =========================
 
-    void OnCollisionEnter(
-        Collision collision)
+    void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
             jumpCount = 0;
@@ -323,8 +448,7 @@ public class PlayerMovement : NetworkBehaviour
         }
     }
 
-    void OnCollisionExit(
-        Collision collision)
+    void OnCollisionExit(Collision collision)
     {
         if (collision.gameObject.layer ==
             LayerMask.NameToLayer("Climb"))

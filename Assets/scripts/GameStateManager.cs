@@ -7,42 +7,83 @@ public class GameStateManager : MonoBehaviour
 
     public enum GameState
     {
+        WaitingForPlayers,
         Playing,
         Ended
     }
 
-    public GameState currentState = GameState.Playing;
+    public GameState currentState =
+        GameState.WaitingForPlayers;
 
     void Awake()
     {
         Instance = this;
     }
 
-    public void EndGame(string winner)
+    // =========================
+    // Start Match
+    // =========================
+
+    public void StartGame()
     {
-        if (currentState == GameState.Ended)
+        if (currentState !=
+            GameState.WaitingForPlayers)
             return;
 
-        currentState = GameState.Ended;
+        currentState = GameState.Playing;
 
-        Debug.Log("Game Ended! Winner: " + winner);
+        Debug.Log("MATCH STARTED!");
+    }
+
+    // =========================
+    // End Match
+    // =========================
+
+    public void EndGame(string winner)
+    {
+        if (currentState ==
+            GameState.Ended)
+            return;
+
+        currentState =
+            GameState.Ended;
+
+        Debug.Log(
+            "Game Ended! Winner: " +
+            winner
+        );
 
         StartCoroutine(EndDelay());
     }
 
     IEnumerator EndDelay()
     {
-        // ✅ اللاعبون يتحركون 3 ثوانٍ
-        yield return new WaitForSeconds(3f);
+        yield return
+            new WaitForSeconds(3f);
 
-        // ✅ إيقاف حركة جميع اللاعبين
-        PlayerMovement[] players = FindObjectsOfType<PlayerMovement>();
+        PlayerMovement[] players =
+            FindObjectsByType<PlayerMovement>(
+                FindObjectsSortMode.None
+            );
 
-        foreach (PlayerMovement player in players)
+        foreach (
+            PlayerMovement player in players)
         {
             player.enabled = false;
         }
 
-        Debug.Log("Players disabled after delay.");
+        Debug.Log(
+            "Players disabled after delay."
+        );
+    }
+
+    // =========================
+    // Helpers
+    // =========================
+
+    public bool IsPlaying()
+    {
+        return currentState ==
+               GameState.Playing;
     }
 }

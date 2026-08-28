@@ -4,18 +4,28 @@ using Unity.Netcode;
 
 public class TeamSelectionUI : MonoBehaviour
 {
+    [Header("Team Selection")]
     public GameObject panel;
     public Button protectorButton;
     public Button destroyerButton;
 
+    [Header("Next Screen")]
+    public CharacterSelectionUI characterSelectionUI;
+
+    private bool characterScreenOpened = false;
+
     void Awake()
     {
         protectorButton.onClick.AddListener(
-            () => SelectTeam(PlayerMovement.TeamType.Protector)
+            () => SelectTeam(
+                PlayerMovement.TeamType.Protector
+            )
         );
 
         destroyerButton.onClick.AddListener(
-            () => SelectTeam(PlayerMovement.TeamType.Destroyer)
+            () => SelectTeam(
+                PlayerMovement.TeamType.Destroyer
+            )
         );
     }
 
@@ -24,7 +34,7 @@ public class TeamSelectionUI : MonoBehaviour
         if (panel == null)
             return;
 
-        // لا نظهر الاختيار قبل الاتصال
+        // لم نتصل بالشبكة بعد
         if (NetworkManager.Singleton == null ||
             !NetworkManager.Singleton.IsClient)
         {
@@ -33,7 +43,8 @@ public class TeamSelectionUI : MonoBehaviour
         }
 
         NetworkObject player =
-            NetworkManager.Singleton.SpawnManager
+            NetworkManager.Singleton
+                .SpawnManager
                 .GetLocalPlayerObject();
 
         if (player == null)
@@ -45,19 +56,35 @@ public class TeamSelectionUI : MonoBehaviour
         if (movement == null)
             return;
 
-        // يظهر فقط إلى أن يختار اللاعب فريقه
-        panel.SetActive(
-            !movement.hasSelectedTeam.Value
-        );
+        // لم يختر الفريق بعد
+        if (!movement.hasSelectedTeam.Value)
+        {
+            panel.SetActive(true);
+            return;
+        }
+
+        // الفريق تم اختياره
+        panel.SetActive(false);
+
+        // افتح اختيار الشخصية مرة واحدة
+        if (!characterScreenOpened)
+        {
+            characterScreenOpened = true;
+
+            if (characterSelectionUI != null)
+                characterSelectionUI.Show();
+        }
     }
 
-    void SelectTeam(PlayerMovement.TeamType selectedTeam)
+    void SelectTeam(
+        PlayerMovement.TeamType selectedTeam)
     {
         if (NetworkManager.Singleton == null)
             return;
 
         NetworkObject player =
-            NetworkManager.Singleton.SpawnManager
+            NetworkManager.Singleton
+                .SpawnManager
                 .GetLocalPlayerObject();
 
         if (player == null)

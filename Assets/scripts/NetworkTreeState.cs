@@ -8,8 +8,6 @@ public class NetworkTreeState : NetworkBehaviour
 
     [Header("Growth")]
     public float growthSpeed = 0.5f;
-
-    // سنضبط هذه القيمة من Inspector
     public float maxHeight = 28f;
 
     private NetworkVariable<float> networkHeight =
@@ -31,32 +29,46 @@ public class NetworkTreeState : NetworkBehaviour
 
         if (IsServer)
         {
-            networkHeight.Value = tree.localScale.y;
+            networkHeight.Value =
+                tree.localScale.y;
         }
 
         ApplyHeight(networkHeight.Value);
 
-        networkHeight.OnValueChanged += OnHeightChanged;
+        networkHeight.OnValueChanged +=
+            OnHeightChanged;
     }
 
     public override void OnNetworkDespawn()
     {
-        networkHeight.OnValueChanged -= OnHeightChanged;
+        networkHeight.OnValueChanged -=
+            OnHeightChanged;
     }
 
     void Update()
     {
-        if (!IsSpawned || !IsServer || tree == null)
+        if (!IsSpawned ||
+            !IsServer ||
+            tree == null)
+            return;
+
+        // لا تنمو الشجرة أثناء اختيار اللاعبين
+        if (GameStateManager.Instance == null)
+            return;
+
+        if (!GameStateManager.Instance.IsPlaying())
             return;
 
         if (networkHeight.Value >= maxHeight)
             return;
 
-        networkHeight.Value = Mathf.Min(
-            networkHeight.Value +
-            growthSpeed * Time.deltaTime,
-            maxHeight
-        );
+        networkHeight.Value =
+            Mathf.Min(
+                networkHeight.Value +
+                growthSpeed *
+                Time.deltaTime,
+                maxHeight
+            );
     }
 
     void OnHeightChanged(
@@ -71,7 +83,8 @@ public class NetworkTreeState : NetworkBehaviour
         if (tree == null)
             return;
 
-        Vector3 scale = tree.localScale;
+        Vector3 scale =
+            tree.localScale;
 
         float difference =
             height - scale.y;
@@ -79,8 +92,8 @@ public class NetworkTreeState : NetworkBehaviour
         scale.y = height;
         tree.localScale = scale;
 
-        // إبقاء قاعدة الشجرة في مكانها
         tree.position +=
-            Vector3.up * (difference * 0.5f);
+            Vector3.up *
+            (difference * 0.5f);
     }
 }

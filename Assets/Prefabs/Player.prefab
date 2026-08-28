@@ -230,6 +230,17 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 1
+  characterDatabase: {fileID: 11400000, guid: 74a050add48e9a74e9f693d1570863fe, type: 2}
+  hasSelectedCharacter:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  selectedCharacterID:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: -1
   walkSpeed: 6
   runSpeed: 10
   climbSpeedMultiplier: 1.4
