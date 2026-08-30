@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using System.Collections.Generic;
 
 public class BotManager : MonoBehaviour
 {
@@ -7,6 +8,9 @@ public class BotManager : MonoBehaviour
 
     [Header("Bot")]
     public GameObject botPrefab;
+
+    [Header("Characters")]
+    public CharacterDatabase characterDatabase;
 
     private bool offlineBotsCreated = false;
 
@@ -32,10 +36,11 @@ public class BotManager : MonoBehaviour
             !NetworkManager.Singleton.IsServer)
             return;
 
-        if (botPrefab == null)
+        if (botPrefab == null ||
+            characterDatabase == null)
         {
             Debug.LogError(
-                "BotManager: Bot Prefab is missing."
+                "BotManager references are missing."
             );
             return;
         }
@@ -51,25 +56,261 @@ public class BotManager : MonoBehaviour
                 ? PlayerMovement.TeamType.Destroyer
                 : PlayerMovement.TeamType.Protector;
 
-        // اللاعب الحقيقي + 4 Bots = 5
-        for (int i = 0; i < 4; i++)
+        // =========================
+        // فريق اللاعب
+        // =========================
+
+        List<CharacterData> humanComposition =
+            new List<CharacterData>();
+
+        // شخصية اللاعب الحقيقي تدخل في حساب التشكيلة
+        CharacterData humanCharacter =
+            characterDatabase.GetCharacter(
+                humanPlayer.selectedCharacterID.Value
+            );
+
+        if (humanCharacter != null)
         {
-            SpawnBot(humanTeam);
+            humanComposition.Add(
+                humanCharacter
+            );
         }
 
-        // الفريق الآخر = 5 Bots
+        // اللاعب + 4 Bots = 5
+        for (int i = 0; i < 4; i++)
+        {
+            CharacterData selected =
+                ChooseBestCharacter(
+                    humanComposition
+                );
+
+            if (selected == null)
+                break;
+
+            humanComposition.Add(
+                selected
+            );
+
+            SpawnBot(
+                humanTeam,
+                selected
+            );
+        }
+
+        // =========================
+        // الفريق الخصم
+        // =========================
+
+        List<CharacterData> enemyComposition =
+            new List<CharacterData>();
+
+        // 5 Bots
         for (int i = 0; i < 5; i++)
         {
-            SpawnBot(enemyTeam);
+            CharacterData selected =
+                ChooseBestCharacter(
+                    enemyComposition
+                );
+
+            if (selected == null)
+                break;
+
+            enemyComposition.Add(
+                selected
+            );
+
+            SpawnBot(
+                enemyTeam,
+                selected
+            );
         }
 
         Debug.Log(
-            "Offline bots created: 4 allies + 5 enemies."
+            "Offline smart 5v5 teams created."
+        );
+
+        PrintComposition(
+            "Human Team",
+            humanComposition
+        );
+
+        PrintComposition(
+            "Enemy Team",
+            enemyComposition
         );
     }
 
+    // =========================
+    // Smart Character Selection
+    // =========================
+
+    CharacterData ChooseBestCharacter(
+        List<CharacterData> currentTeam)
+    {
+        // أولاً نضمن الأدوار الأساسية:
+        // Tank + Support + Control
+
+        CharacterData.CharacterRole[] requiredRoles =
+        {
+            CharacterData.CharacterRole.Tank,
+            CharacterData.CharacterRole.Support,
+            CharacterData.CharacterRole.Control
+        };
+
+        foreach (
+            CharacterData.CharacterRole role
+            in requiredRoles)
+        {
+            // إذا الفريق لا يحتوي هذا الدور
+            if (!HasRole(currentTeam, role))
+            {
+                CharacterData candidate =
+                    FindAvailableCharacter(
+                        role,
+                        currentTeam
+                    );
+
+                if (candidate != null)
+                    return candidate;
+            }
+        }
+
+        // =========================
+        // الأدوار الأساسية موجودة
+        // =========================
+
+        // الآن نعطي الأولوية للقوة الهجومية
+        // بدل تكرار Tank وSupport
+
+        CharacterData.CharacterRole[] fillPriorities =
+        {
+            CharacterData.CharacterRole.Damage,
+            CharacterData.CharacterRole.Specialist,
+            CharacterData.CharacterRole.Control,
+            CharacterData.CharacterRole.Support,
+            CharacterData.CharacterRole.Tank
+        };
+
+        foreach (
+            CharacterData.CharacterRole role
+            in fillPriorities)
+        {
+            CharacterData candidate =
+                FindAvailableCharacter(
+                    role,
+                    currentTeam
+                );
+
+            if (candidate != null)
+                return candidate;
+        }
+
+        return null;
+    }
+
+    // =========================
+    // Has Role
+    // =========================
+
+    bool HasRole(
+        List<CharacterData> team,
+        CharacterData.CharacterRole role)
+    {
+        foreach (
+            CharacterData character
+            in team)
+        {
+            if (character != null &&
+                character.role == role)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // =========================
+    // Find Available Character
+    // =========================
+
+    CharacterData FindAvailableCharacter(
+        CharacterData.CharacterRole role,
+        List<CharacterData> currentTeam)
+    {
+        List<CharacterData> candidates =
+            new List<CharacterData>();
+
+        foreach (
+            CharacterData character
+            in characterDatabase.characters)
+        {
+            if (character == null)
+                continue;
+
+            if (character.role != role)
+                continue;
+
+            int count =
+                CountCharacter(
+                    currentTeam,
+                    character.characterID
+                );
+
+            // احترام Max Per Team
+            if (count >= character.maxPerTeam)
+                continue;
+
+            candidates.Add(
+                character
+            );
+        }
+
+        if (candidates.Count == 0)
+            return null;
+
+        // اختيار عشوائي من الشخصيات
+        // المتاحة في الدور المطلوب
+        return candidates[
+            Random.Range(
+                0,
+                candidates.Count
+            )
+        ];
+    }
+
+    // =========================
+    // Count Character
+    // =========================
+
+    int CountCharacter(
+        List<CharacterData> team,
+        int characterID)
+    {
+        int count = 0;
+
+        foreach (
+            CharacterData character
+            in team)
+        {
+            if (character != null &&
+                character.characterID ==
+                characterID)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    // =========================
+    // Spawn Bot
+    // =========================
+
     void SpawnBot(
-        PlayerMovement.TeamType team)
+        PlayerMovement.TeamType team,
+        CharacterData character)
     {
         Transform spawnPoint = null;
 
@@ -97,17 +338,62 @@ public class BotManager : MonoBehaviour
                 rotation
             );
 
+        // =========================
+        // Bot Controller
+        // =========================
+
         BotController controller =
             botObject.GetComponent<BotController>();
 
         if (controller != null)
+        {
             controller.team = team;
+        }
+
+        // =========================
+        // Combat
+        // =========================
 
         CharacterCombat combat =
             botObject.GetComponent<CharacterCombat>();
 
         if (combat != null)
+        {
             combat.team = team;
+            combat.characterData = character;
+
+            combat.attackDamage =
+                character.attackDamage;
+
+            combat.attackCooldown =
+                character.attackCooldown;
+
+            combat.attackRange =
+                character.attackRange;
+
+            combat.attackType =
+                character.attackType;
+        }
+
+        // =========================
+        // Health
+        // =========================
+
+        Health health =
+            botObject.GetComponent<Health>();
+
+        if (health != null)
+        {
+            health.maxHealth =
+                character.maxHealth;
+
+            health.currentHealth =
+                character.maxHealth;
+        }
+
+        // =========================
+        // Network
+        // =========================
 
         NetworkObject networkObject =
             botObject.GetComponent<NetworkObject>();
@@ -122,5 +408,40 @@ public class BotManager : MonoBehaviour
                 "Bot prefab has no NetworkObject."
             );
         }
+
+        Debug.Log(
+            "Spawned Bot | Team: " +
+            team +
+            " | Character: " +
+            character.characterName +
+            " | Role: " +
+            character.role
+        );
+    }
+
+    // =========================
+    // Debug Composition
+    // =========================
+
+    void PrintComposition(
+        string title,
+        List<CharacterData> team)
+    {
+        string result =
+            title + ": ";
+
+        foreach (
+            CharacterData character
+            in team)
+        {
+            result +=
+                "[" +
+                character.characterName +
+                " - " +
+                character.role +
+                "] ";
+        }
+
+        Debug.Log(result);
     }
 }
