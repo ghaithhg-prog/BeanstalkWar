@@ -22,9 +22,8 @@ public class CharacterSelectionUI : MonoBehaviour
     private bool generated = false;
     private CharacterData selectedCharacter;
 
-    // =========================
-    // Awake
-    // =========================
+    // يمنع إنشاء الـ Bots أكثر من مرة
+    private bool offlineSetupDone = false;
 
     void Awake()
     {
@@ -37,10 +36,6 @@ public class CharacterSelectionUI : MonoBehaviour
             confirmButton.interactable = false;
         }
     }
-
-    // =========================
-    // Update
-    // =========================
 
     void Update()
     {
@@ -64,16 +59,33 @@ public class CharacterSelectionUI : MonoBehaviour
         if (movement == null)
             return;
 
-        // السيرفر وافق على اختيار الشخصية
+        // السيرفر وافق على الشخصية
         if (movement.hasSelectedCharacter.Value)
         {
             Hide();
+
+            // في Offline فقط:
+            // أنشئ بقية الفريق والخصوم كـ Bots
+            if (!offlineSetupDone &&
+                PlayModeUI.SelectedMode ==
+                PlayModeUI.PlayMode.Offline)
+            {
+                offlineSetupDone = true;
+
+                if (BotManager.Instance != null)
+                {
+                    BotManager.Instance
+                        .CreateOfflineBots(movement);
+                }
+                else
+                {
+                    Debug.LogError(
+                        "BotManager Instance not found."
+                    );
+                }
+            }
         }
     }
-
-    // =========================
-    // Show / Hide
-    // =========================
 
     public void Show()
     {
@@ -96,10 +108,6 @@ public class CharacterSelectionUI : MonoBehaviour
         if (panel != null)
             panel.SetActive(false);
     }
-
-    // =========================
-    // Generate Characters
-    // =========================
 
     void GenerateCards()
     {
@@ -135,17 +143,10 @@ public class CharacterSelectionUI : MonoBehaviour
         }
     }
 
-    // =========================
-    // Select Character
-    // =========================
-
-    void OnCharacterSelected(
-        int characterID)
+    void OnCharacterSelected(int characterID)
     {
         CharacterData data =
-            database.GetCharacter(
-                characterID
-            );
+            database.GetCharacter(characterID);
 
         if (data == null)
             return;
@@ -161,39 +162,24 @@ public class CharacterSelectionUI : MonoBehaviour
         if (selectedRoleText != null)
         {
             selectedRoleText.text =
-                "Role: " +
-                data.role;
+                "Role: " + data.role;
         }
 
         if (selectedStatsText != null)
         {
             selectedStatsText.text =
-                "Health: " +
-                data.maxHealth +
-
-                "\nDamage: " +
-                data.attackDamage +
-
-                "\nSpeed: " +
-                data.moveSpeed +
-
-                "\nAttack Range: " +
-                data.attackRange +
-
-                "\nAttack Cooldown: " +
-                data.attackCooldown;
+                "Health: " + data.maxHealth +
+                "\nDamage: " + data.attackDamage +
+                "\nSpeed: " + data.moveSpeed +
+                "\nAttack Range: " + data.attackRange +
+                "\nAttack Cooldown: " + data.attackCooldown;
         }
 
         if (confirmButton != null)
         {
-            confirmButton.interactable =
-                true;
+            confirmButton.interactable = true;
         }
     }
-
-    // =========================
-    // Confirm
-    // =========================
 
     void ConfirmSelection()
     {
@@ -228,13 +214,8 @@ public class CharacterSelectionUI : MonoBehaviour
             selectedCharacter.characterID
         );
 
-        // لا نخفي الشاشة هنا.
-        // ننتظر موافقة السيرفر.
+        // ننتظر موافقة السيرفر قبل إخفاء الشاشة.
     }
-
-    // =========================
-    // Clear
-    // =========================
 
     void ClearSelection()
     {
@@ -258,8 +239,7 @@ public class CharacterSelectionUI : MonoBehaviour
 
         if (confirmButton != null)
         {
-            confirmButton.interactable =
-                false;
+            confirmButton.interactable = false;
         }
     }
 }
