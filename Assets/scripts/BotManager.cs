@@ -42,6 +42,7 @@ public class BotManager : MonoBehaviour
             Debug.LogError(
                 "BotManager references are missing."
             );
+
             return;
         }
 
@@ -63,7 +64,6 @@ public class BotManager : MonoBehaviour
         List<CharacterData> humanComposition =
             new List<CharacterData>();
 
-        // شخصية اللاعب الحقيقي تدخل في حساب التشكيلة
         CharacterData humanCharacter =
             characterDatabase.GetCharacter(
                 humanPlayer.selectedCharacterID.Value
@@ -76,7 +76,7 @@ public class BotManager : MonoBehaviour
             );
         }
 
-        // اللاعب + 4 Bots = 5
+        // اللاعب الحقيقي + 4 Bots
         for (int i = 0; i < 4; i++)
         {
             CharacterData selected =
@@ -125,6 +125,10 @@ public class BotManager : MonoBehaviour
             );
         }
 
+        // =========================
+        // Debug
+        // =========================
+
         Debug.Log(
             "Offline smart 5v5 teams created."
         );
@@ -138,6 +142,22 @@ public class BotManager : MonoBehaviour
             "Enemy Team",
             enemyComposition
         );
+
+        // =========================
+        // Start Match Countdown
+        // =========================
+
+        if (GameStateManager.Instance != null)
+        {
+            GameStateManager.Instance
+                .RequestStartGame();
+        }
+        else
+        {
+            Debug.LogError(
+                "GameStateManager Instance not found."
+            );
+        }
     }
 
     // =========================
@@ -147,8 +167,8 @@ public class BotManager : MonoBehaviour
     CharacterData ChooseBestCharacter(
         List<CharacterData> currentTeam)
     {
-        // أولاً نضمن الأدوار الأساسية:
-        // Tank + Support + Control
+        // أولاً:
+        // نضمن Tank + Support + Control
 
         CharacterData.CharacterRole[] requiredRoles =
         {
@@ -161,8 +181,9 @@ public class BotManager : MonoBehaviour
             CharacterData.CharacterRole role
             in requiredRoles)
         {
-            // إذا الفريق لا يحتوي هذا الدور
-            if (!HasRole(currentTeam, role))
+            if (!HasRole(
+                    currentTeam,
+                    role))
             {
                 CharacterData candidate =
                     FindAvailableCharacter(
@@ -176,11 +197,12 @@ public class BotManager : MonoBehaviour
         }
 
         // =========================
-        // الأدوار الأساسية موجودة
+        // بعد اكتمال الأدوار الأساسية
         // =========================
 
-        // الآن نعطي الأولوية للقوة الهجومية
-        // بدل تكرار Tank وSupport
+        // نعطي الأولوية للهجوم
+        // حتى لا تتكرر Tanks وSupports
+        // بلا حاجة.
 
         CharacterData.CharacterRole[] fillPriorities =
         {
@@ -258,8 +280,11 @@ public class BotManager : MonoBehaviour
                 );
 
             // احترام Max Per Team
-            if (count >= character.maxPerTeam)
+            if (count >=
+                character.maxPerTeam)
+            {
                 continue;
+            }
 
             candidates.Add(
                 character
@@ -270,7 +295,8 @@ public class BotManager : MonoBehaviour
             return null;
 
         // اختيار عشوائي من الشخصيات
-        // المتاحة في الدور المطلوب
+        // المتاحة داخل الدور المطلوب.
+
         return candidates[
             Random.Range(
                 0,
@@ -312,7 +338,8 @@ public class BotManager : MonoBehaviour
         PlayerMovement.TeamType team,
         CharacterData character)
     {
-        Transform spawnPoint = null;
+        Transform spawnPoint =
+            null;
 
         if (SpawnManager.Instance != null)
         {
@@ -347,7 +374,8 @@ public class BotManager : MonoBehaviour
 
         if (controller != null)
         {
-            controller.team = team;
+            controller.team =
+                team;
         }
 
         // =========================
@@ -359,8 +387,11 @@ public class BotManager : MonoBehaviour
 
         if (combat != null)
         {
-            combat.team = team;
-            combat.characterData = character;
+            combat.team =
+                team;
+
+            combat.characterData =
+                character;
 
             combat.attackDamage =
                 character.attackDamage;
@@ -408,6 +439,10 @@ public class BotManager : MonoBehaviour
                 "Bot prefab has no NetworkObject."
             );
         }
+
+        // =========================
+        // Debug Bot
+        // =========================
 
         Debug.Log(
             "Spawned Bot | Team: " +
