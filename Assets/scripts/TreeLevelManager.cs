@@ -12,6 +12,9 @@ public class TreeLevelManager : MonoBehaviour
     [Header("Paths")]
     public SpiralConnector spiralConnector;
 
+    [Header("Navigation")]
+    public RuntimeNavMeshUpdater navMeshUpdater;
+
     private bool[] unlocked;
 
     void Start()
@@ -20,10 +23,15 @@ public class TreeLevelManager : MonoBehaviour
 
         for (int i = 0; i < levels.Length; i++)
         {
-            bool shouldBeActive = i == 0;
+            bool shouldBeActive =
+                i == 0;
 
-            levels[i].SetActive(shouldBeActive);
-            unlocked[i] = shouldBeActive;
+            levels[i].SetActive(
+                shouldBeActive
+            );
+
+            unlocked[i] =
+                shouldBeActive;
         }
     }
 
@@ -32,13 +40,17 @@ public class TreeLevelManager : MonoBehaviour
         if (tree == null)
             return;
 
-        float currentHeight = tree.localScale.y;
+        float currentHeight =
+            tree.localScale.y;
 
-        for (int i = 1; i < levels.Length; i++)
+        for (int i = 1;
+             i < levels.Length;
+             i++)
         {
             if (!unlocked[i] &&
                 i < unlockHeights.Length &&
-                currentHeight >= unlockHeights[i])
+                currentHeight >=
+                unlockHeights[i])
             {
                 UnlockLevel(i);
             }
@@ -47,26 +59,41 @@ public class TreeLevelManager : MonoBehaviour
 
     void UnlockLevel(int index)
     {
+        // =========================
+        // فتح المستوى
+        // =========================
+
         levels[index].SetActive(true);
+
         unlocked[index] = true;
 
-        // Level index يطابق قسم الممر المؤدي إليه:
-        //
-        // index 1 = Level_2
-        // Paths section 1 = Level_1 -> Level_2
-        //
-        // index 2 = Level_3
-        // Paths section 2 = Level_2 -> Level_3
-        //
-        // index 3 = TopLevel
-        // Paths section 3 = Level_3 -> TopLevel
+        // =========================
+        // فتح الممر المؤدي إليه
+        // =========================
 
         if (spiralConnector != null)
-            spiralConnector.SetSectionUnlocked(index, true);
+        {
+            spiralConnector
+                .SetSectionUnlocked(
+                    index,
+                    true
+                );
+        }
 
         Debug.Log(
-            "Level " + (index + 1) +
+            "Level " +
+            (index + 1) +
             " unlocked with its paths!"
         );
+
+        // =========================
+        // تحديث الملاحة
+        // =========================
+
+        if (navMeshUpdater != null)
+        {
+            navMeshUpdater
+                .RebuildNavMesh();
+        }
     }
 }

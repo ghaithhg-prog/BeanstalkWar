@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: BomberData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   characterID: 2
-  characterName: 
+  characterName: Bomber
   description: 
   characterIcon: {fileID: 0}
-  role: 1
+  role: 2
   maxPerTeam: 2
   maxHealth: 100
   attackDamage: 20

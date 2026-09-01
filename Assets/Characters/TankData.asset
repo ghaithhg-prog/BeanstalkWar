@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: TankData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   characterID: 4
-  characterName: 
+  characterName: Tank
   description: 
   characterIcon: {fileID: 0}
-  role: 1
+  role: 0
   maxPerTeam: 2
   maxHealth: 100
   attackDamage: 20

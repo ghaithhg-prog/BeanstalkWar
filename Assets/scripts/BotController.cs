@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using UnityEngine.AI;
 
 public class BotController : NetworkBehaviour
 {
@@ -12,27 +13,86 @@ public class BotController : NetworkBehaviour
     [Header("Target")]
     public Transform treeTarget;
 
-    private Rigidbody rb;
+    [Header("Protector")]
+    public float minDefenseRadius = 5f;
+    public float maxDefenseRadius = 8f;
 
-    // مكان دفاع الحامي
+    private NavMeshAgent agent;
+
+    // موقع الحماية
     private Vector3 protectorTarget;
 
-    // هل تم تجهيز الهدف؟
     private bool targetInitialized = false;
+    private bool agentReady = false;
+
+    // =========================
+    // Network Spawn
+    // =========================
 
     public override void OnNetworkSpawn()
     {
-        // السيرفر فقط يتحكم في AI
+        // السيرفر فقط يشغل AI
         enabled = IsServer;
 
         if (!IsServer)
             return;
 
-        rb = GetComponent<Rigidbody>();
+        agent =
+            GetComponent<NavMeshAgent>();
+
+        if (agent == null)
+        {
+            Debug.LogError(
+                "Bot has no NavMeshAgent."
+            );
+
+            enabled = false;
+            return;
+        }
+
+        agent.speed = moveSpeed;
 
         FindTree();
 
-        InitializeTarget();
+        PrepareAgent();
+    }
+
+    // =========================
+    // Prepare Agent
+    // =========================
+
+    void PrepareAgent()
+    {
+        if (agent == null)
+            return;
+
+        // نحاول إيجاد أقرب نقطة NavMesh
+        // لمكان ظهور الـBot.
+
+        NavMeshHit hit;
+
+        if (NavMesh.SamplePosition(
+                transform.position,
+                out hit,
+                5f,
+                NavMesh.AllAreas))
+        {
+            agent.Warp(
+                hit.position
+            );
+
+            agentReady = true;
+
+            InitializeTarget();
+        }
+        else
+        {
+            Debug.LogWarning(
+                "Bot could not find nearby NavMesh."
+            );
+
+            agentReady = false;
+        }
     }
 
     // =========================
@@ -68,41 +128,107 @@ public class BotController : NetworkBehaviour
         if (treeTarget == null)
             return;
 
-        // Protectors يقفون حول الشجرة
         if (team ==
             PlayerMovement.TeamType.Protector)
         {
-            Vector2 randomCircle =
-                Random.insideUnitCircle.normalized
-                * Random.Range(5f, 8f);
-
-            protectorTarget =
-                treeTarget.position +
-                new Vector3(
-                    randomCircle.x,
-                    0f,
-                    randomCircle.y
-                );
+            FindProtectorPosition();
         }
 
         targetInitialized = true;
     }
 
     // =========================
+    // Protector Position
+    // =========================
+
+    void FindProtectorPosition()
+    {
+        if (treeTarget == null)
+            return;
+
+        for (int attempt = 0;
+             attempt < 10;
+             attempt++)
+        {
+            Vector2 circle =
+                Random.insideUnitCircle;
+
+            if (circle.sqrMagnitude < 0.01f)
+                continue;
+
+            circle.Normalize();
+
+            float radius =
+                Random.Range(
+                    minDefenseRadius,
+                    maxDefenseRadius
+                );
+
+            Vector3 candidate =
+                treeTarget.position +
+                new Vector3(
+                    circle.x,
+                    0f,
+                    circle.y
+                ) * radius;
+
+            NavMeshHit hit;
+
+            if (NavMesh.SamplePosition(
+                    candidate,
+                    out hit,
+                    4f,
+                    NavMesh.AllAreas))
+            {
+                protectorTarget =
+                    hit.position;
+
+                return;
+            }
+        }
+
+        // fallback
+        protectorTarget =
+            transform.position;
+    }
+
+    // =========================
     // Update
     // =========================
 
-    void FixedUpdate()
+    void Update()
     {
         if (!IsServer)
+            return;
+
+        if (agent == null)
             return;
 
         // لا يتحرك قبل GO
         if (GameStateManager.Instance == null ||
             !GameStateManager.Instance.IsPlaying())
         {
+            if (agent.isOnNavMesh)
+                agent.isStopped = true;
+
             return;
         }
+
+        if (!agentReady)
+        {
+            PrepareAgent();
+
+            if (!agentReady)
+                return;
+        }
+
+        if (!agent.isOnNavMesh)
+        {
+            agentReady = false;
+            return;
+        }
+
+        agent.isStopped = false;
 
         if (treeTarget == null)
         {
@@ -115,73 +241,79 @@ public class BotController : NetworkBehaviour
         if (!targetInitialized)
             InitializeTarget();
 
-        MoveBot();
+        UpdateDestination();
     }
 
     // =========================
-    // Movement
+    // Destination
     // =========================
 
-    void MoveBot()
+    void UpdateDestination()
     {
-        Vector3 targetPosition;
+        Vector3 destination;
 
         if (team ==
             PlayerMovement.TeamType.Destroyer)
         {
-            // المدمر يتجه نحو الشجرة
-            targetPosition =
-                treeTarget.position;
+            // لا نطلب مركز الشجرة مباشرة
+            // لأنه قد لا يكون على NavMesh.
+            destination =
+                FindClosestTreePosition();
         }
         else
         {
-            // الحامي يتجه إلى موقع دفاعي
-            targetPosition =
+            destination =
                 protectorTarget;
         }
 
-        Vector3 direction =
-            targetPosition -
-            transform.position;
+        if (!agent.pathPending)
+        {
+            agent.SetDestination(
+                destination
+            );
+        }
+    }
 
-        // حركة أفقية فقط
+    // =========================
+    // Closest Tree Position
+    // =========================
+
+    Vector3 FindClosestTreePosition()
+    {
+        if (treeTarget == null)
+            return transform.position;
+
+        Vector3 direction =
+            transform.position -
+            treeTarget.position;
+
         direction.y = 0f;
 
-        float distance =
-            direction.magnitude;
-
-        // توقف عندما يصل
-        if (distance < 1.5f)
-            return;
+        if (direction.sqrMagnitude <
+            0.01f)
+        {
+            direction =
+                Vector3.forward;
+        }
 
         direction.Normalize();
 
-        Vector3 nextPosition =
-            rb.position +
-            direction *
-            moveSpeed *
-            Time.fixedDeltaTime;
+        // نقطة قرب الشجرة وليست داخلها
+        Vector3 desired =
+            treeTarget.position +
+            direction * 4f;
 
-        rb.MovePosition(
-            nextPosition
-        );
+        NavMeshHit hit;
 
-        // تدوير الـBot نحو اتجاه الحركة
-        if (direction != Vector3.zero)
+        if (NavMesh.SamplePosition(
+                desired,
+                out hit,
+                5f,
+                NavMesh.AllAreas))
         {
-            Quaternion targetRotation =
-                Quaternion.LookRotation(
-                    direction
-                );
-
-            rb.MoveRotation(
-                Quaternion.Slerp(
-                    rb.rotation,
-                    targetRotation,
-                    8f *
-                    Time.fixedDeltaTime
-                )
-            );
+            return hit.position;
         }
+
+        return transform.position;
     }
 }

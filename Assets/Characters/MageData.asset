@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: MageData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   characterID: 3
-  characterName: 
+  characterName: Mage
   description: 
   characterIcon: {fileID: 0}
-  role: 1
+  role: 3
   maxPerTeam: 2
   maxHealth: 100
   attackDamage: 20

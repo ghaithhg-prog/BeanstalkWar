@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WarriorData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   characterID: 5
-  characterName: 
+  characterName: Warrior
   description: 
   characterIcon: {fileID: 0}
   role: 1

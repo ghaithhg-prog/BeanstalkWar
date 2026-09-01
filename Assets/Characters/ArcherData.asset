@@ -12,7 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7e1af3c5db61ff479286a68bab28f1a, type: 3}
   m_Name: ArcherData
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
-  characterName: 
+  characterID: 0
+  characterName: Archer
+  description: 
+  characterIcon: {fileID: 0}
+  role: 1
+  maxPerTeam: 2
   maxHealth: 100
   attackDamage: 20
   attackCooldown: 1
