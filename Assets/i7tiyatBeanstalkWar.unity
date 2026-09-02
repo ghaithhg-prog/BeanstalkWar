@@ -410,6 +410,7 @@ MonoBehaviour:
   - 25
   - 28.5
   spiralConnector: {fileID: 838068927}
+  navMeshUpdater: {fileID: 203060048}
 --- !u!4 &131014318
 Transform:
   m_ObjectHideFlags: 0
