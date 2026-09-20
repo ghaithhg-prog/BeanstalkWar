@@ -120,6 +120,13 @@ public class CharacterCombat : NetworkBehaviour
             return;
         }
 
+        // لا يستطيع حامل الكريستالة استخدام الأسلحة العادية
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+        if (movement != null && movement.isCarryingCrystal.Value)
+        {
+            return;
+        }
+
         AlignWithCamera();
 
         bool mouseAttack =
@@ -191,6 +198,12 @@ public class CharacterCombat : NetworkBehaviour
 
         if (GameStateManager.Instance == null ||
             !GameStateManager.Instance.IsPlaying())
+        {
+            return false;
+        }
+
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+        if (movement != null && movement.isCarryingCrystal.Value)
         {
             return false;
         }
@@ -390,17 +403,20 @@ public class CharacterCombat : NetworkBehaviour
 
             if (tree != null)
             {
+                float levelMultiplier = TreeGrowth.GetHeightMultiplier(transform.position);
+                float finalAmount = attackDamage * levelMultiplier;
+
                 if (team ==
                     PlayerMovement.TeamType.Destroyer)
                 {
                     tree.TakeDamage(
-                        attackDamage
+                        finalAmount
                     );
                 }
                 else
                 {
                     tree.Heal(
-                        attackDamage
+                        finalAmount
                     );
                 }
 

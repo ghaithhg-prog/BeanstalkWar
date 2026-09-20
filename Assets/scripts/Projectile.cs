@@ -16,10 +16,13 @@ public class Projectile : MonoBehaviour
         TreeGrowth tree = other.GetComponent<TreeGrowth>();
         if (tree != null)
         {
+            float levelMultiplier = TreeGrowth.GetHeightMultiplier(transform.position);
+            float finalAmount = damage * levelMultiplier;
+
             if (team == PlayerMovement.TeamType.Destroyer)
-                tree.TakeDamage(damage);
+                tree.TakeDamage(finalAmount);
             else
-                tree.Heal(damage);
+                tree.Heal(finalAmount);
 
             Destroy(gameObject);
             return;

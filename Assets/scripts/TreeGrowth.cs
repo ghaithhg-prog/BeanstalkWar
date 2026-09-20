@@ -15,12 +15,12 @@ public class TreeGrowth : MonoBehaviour
     public float shakeAmount = 0.1f;
 
     [Header("Health")]
-    public float maxHealth = 100f;
+    public float maxHealth = 800f;
     public float currentHealth;
 
     [Header("Critical State")]
     public float criticalDuration = 4f;
-    public float rescueHealThreshold = 30f;
+    public float rescueHealThreshold = 120f;
 
     [Header("Fall Settings")]
     public float fallSpeed = 120f;
@@ -41,7 +41,62 @@ public class TreeGrowth : MonoBehaviour
 
     void Start()
     {
+        if (maxHealth < 200f)
+        {
+            maxHealth = 800f;
+            rescueHealThreshold = 120f;
+        }
+
         currentHealth = maxHealth;
+        FormatHealthBarUI();
+    }
+
+    void FormatHealthBarUI()
+    {
+        if (healthBarFill != null)
+        {
+            RectTransform fillRect = healthBarFill.rectTransform;
+            RectTransform parentRect = fillRect.parent as RectTransform;
+
+            if (parentRect != null)
+            {
+                // جعل شريط الصحة ممتداً بعرض الشاشة كشريط عريض بالأعلى
+                parentRect.anchorMin = new Vector2(0.08f, 1f);
+                parentRect.anchorMax = new Vector2(0.92f, 1f);
+                parentRect.pivot = new Vector2(0.5f, 1f);
+                parentRect.anchoredPosition = new Vector2(0f, -12f);
+                parentRect.sizeDelta = new Vector2(0f, 32f);
+            }
+
+            fillRect.anchorMin = new Vector2(0f, 0f);
+            fillRect.anchorMax = new Vector2(1f, 1f);
+            fillRect.sizeDelta = Vector2.zero;
+            fillRect.anchoredPosition = Vector2.zero;
+        }
+    }
+
+    // مضاعف الضرر والعلاج بحسب مستوى الارتفاع الذي يقف عنده اللاعب
+    public static float GetHeightMultiplier(Vector3 attackerPosition)
+    {
+        float y = attackerPosition.y;
+
+        GameObject treeLevels = GameObject.Find("TreeLevels");
+        if (treeLevels != null)
+        {
+            Transform l3 = treeLevels.transform.Find("Level_3");
+            Transform l2 = treeLevels.transform.Find("Level_2");
+            Transform l1 = treeLevels.transform.Find("Level_1");
+
+            if (l3 != null && y >= l3.position.y - 1.5f) return 3.0f; // Level 3 / Top: 300%
+            if (l2 != null && y >= l2.position.y - 1.5f) return 2.2f; // Level 2: 220%
+            if (l1 != null && y >= l1.position.y - 1.5f) return 1.5f; // Level 1: 150%
+            return 1.0f; // Ground / Base: 100%
+        }
+
+        if (y >= 18f) return 3.0f;
+        if (y >= 10f) return 2.2f;
+        if (y >= 4f)  return 1.5f;
+        return 1.0f;
     }
 
     void Update()
@@ -146,10 +201,13 @@ public class TreeGrowth : MonoBehaviour
         }
     }
 
+    public static event System.Action OnTreeReachedTopLevel;
+    public bool IsMature => isMature;
+
     void ExitCriticalState()
     {
         isCritical = false;
-        currentHealth = maxHealth * 0.25f; // ✅ تعود بـ 25%
+        currentHealth = maxHealth * 0.30f; // ✅ تعود بـ 30%
 
         Debug.Log("Tree rescued from Critical State!");
     }
@@ -183,7 +241,10 @@ public class TreeGrowth : MonoBehaviour
             transform.parent.position = originalPivotPosition;
 
             if (isMature && !isCritical)
+            {
                 Debug.Log("Tree reached Top Level. Crystal Ready!");
+                OnTreeReachedTopLevel?.Invoke();
+            }
         }
     }
 

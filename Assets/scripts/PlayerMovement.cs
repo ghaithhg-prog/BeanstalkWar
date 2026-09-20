@@ -47,6 +47,16 @@ public class PlayerMovement : NetworkBehaviour
             NetworkVariableWritePermission.Server
         );
 
+    [Header("Crystal Carry")]
+    public NetworkVariable<bool> isCarryingCrystal =
+        new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public float crystalSpeedMultiplier = 0.82f;
+
     [Header("Movement")]
     public float walkSpeed = 6f;
     public float runSpeed = 10f;
@@ -375,6 +385,9 @@ public class PlayerMovement : NetworkBehaviour
 
         if (isOnClimbPath)
             currentSpeed *= climbSpeedMultiplier;
+
+        if (isCarryingCrystal != null && isCarryingCrystal.Value)
+            currentSpeed *= crystalSpeedMultiplier;
 
         rb.MovePosition(
             transform.position +
