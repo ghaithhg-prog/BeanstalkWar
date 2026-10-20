@@ -333,7 +333,7 @@ public class ForestBGMManager : MonoBehaviour
     private static void AddHeavyTaiko(float[] left, float[] right, float startTime, int sampleRate, float volume)
     {
         int startSample = (int)(startTime * sampleRate);
-        int hitSamples = (int)(0.52f * sampleRate);
+        int hitSamples = (int)(0.55f * sampleRate);
         float phase = 0f;
 
         for (int s = 0; s < hitSamples; s++)
@@ -343,17 +343,17 @@ public class ForestBGMManager : MonoBehaviour
 
             float t = (float)s / sampleRate;
 
-            // غلاف الضرب المدوّي (Punch + Body)
-            float malletClick = Mathf.Exp(-t * 60f) * 2.2f; // ضربة المضرب الخشبي الحادة
-            float bodyBoom = Mathf.Exp(-t * 9.5f);         // رنين جلد الطبل العميق
-            float subRumble = Mathf.Exp(-t * 5.5f) * 0.45f; // اهتزاز الباص تحت 50 هرتز
+            // غلاف الضرب المدوّي (Punch + Body + Sub-bass)
+            float malletClick = Mathf.Exp(-t * 50f) * 3.0f; // ضربة المضرب الخشبي الحادة
+            float bodyBoom = Mathf.Exp(-t * 8.5f) * 1.35f;  // رنين جلد الطبل القوي
+            float subRumble = Mathf.Exp(-t * 5.0f) * 0.75f; // اهتزاز الباص العميق
 
-            // انحدار التردد لمحاكاة شد جلد الطبل الواقعي (135 هرتز إلى 46 هرتز)
-            float pitch = 46f + Mathf.Exp(-t * 32f) * 89f;
+            // انحدار التردد لمحاكاة شد جلد طبل التاييكو الضخم (180 هرتز إلى 54 هرتز)
+            float pitch = 54f + Mathf.Exp(-t * 26f) * 126f;
             phase += 2f * Mathf.PI * pitch / sampleRate;
 
-            float drumWave = Mathf.Sin(phase) + Mathf.Sin(phase * 0.5f) * 0.4f + Mathf.Sin(phase * 2f) * 0.15f;
-            float sample = (drumWave * (bodyBoom + subRumble) + malletClick) * volume * 0.42f;
+            float drumWave = Mathf.Sin(phase) + Mathf.Sin(phase * 0.5f) * 0.45f + Mathf.Sin(phase * 2f) * 0.22f;
+            float sample = (drumWave * (bodyBoom + subRumble) + malletClick) * volume * 0.46f;
 
             left[idx] += sample;
             right[idx] += sample;

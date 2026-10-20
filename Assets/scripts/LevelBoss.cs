@@ -35,6 +35,17 @@ public class LevelBoss : NetworkBehaviour
     private GameObject myPlatformObject = null;
     private bool isDormant = false;
 
+    public float GetExpectedLevelY()
+    {
+        return levelNumber switch
+        {
+            1 => 6.5f,
+            2 => 16.5f,
+            3 => 26.5f,
+            _ => 6.5f
+        };
+    }
+
     void Awake()
     {
         // حماية هامة: إذا كان الزعيم موضوعاً كابن لمنصة ذات مقياس كبير، نخرجه منها لتجنب تضخم الحجم وتشوه الحركة
@@ -47,7 +58,9 @@ public class LevelBoss : NetworkBehaviour
             transform.rotation = worldRot;
         }
 
-        guardCenter = transform.position;
+        float y = GetExpectedLevelY();
+        guardCenter = new Vector3(transform.position.x, y, transform.position.z);
+        transform.position = guardCenter;
         InitializeBoss();
     }
 
@@ -422,7 +435,8 @@ public class LevelBoss : NetworkBehaviour
     {
         gameObject.SetActive(true);
         isAwaitingLevelUnlock = false;
-        guardCenter = platformPos + Vector3.up * 1.5f;
+        float y = GetExpectedLevelY();
+        guardCenter = new Vector3(platformPos.x, y, platformPos.z);
         transform.position = guardCenter;
         SetBossDormant(false);
 
@@ -603,16 +617,19 @@ public class LevelBoss : NetworkBehaviour
         if (agent == null || !agent.isOnNavMesh) return;
 
         float maxLeash = GetLeashRadius();
+        float expectedY = GetExpectedLevelY();
+        guardCenter.y = expectedY;
+
         Vector2 centerXZ = new Vector2(guardCenter.x, guardCenter.z);
         Vector2 bossXZ = new Vector2(transform.position.x, transform.position.z);
         float currentDistFromCenter = Vector2.Distance(bossXZ, centerXZ);
-        float verticalDiffFromCenter = Mathf.Abs(transform.position.y - guardCenter.y);
+        float verticalDiffFromCenter = Mathf.Abs(transform.position.y - expectedY);
 
         // حماية قصوى: إذا سقط الزعيم أو تم دفعه خارج حدوده يعود فوراً لمنصته ولا يسقط للأسفل أبداً
-        if (currentDistFromCenter > maxLeash * 1.35f || transform.position.y < guardCenter.y - 1.2f || verticalDiffFromCenter > 2.5f)
+        if (currentDistFromCenter > maxLeash * 1.35f || verticalDiffFromCenter > 2.0f)
         {
-            if (agent != null && agent.isOnNavMesh) agent.Warp(guardCenter);
             transform.position = guardCenter;
+            if (agent != null && agent.enabled && agent.isOnNavMesh) agent.Warp(guardCenter);
             return;
         }
 

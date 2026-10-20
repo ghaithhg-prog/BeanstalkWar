@@ -156,22 +156,20 @@ public class TreeLevelManager : MonoBehaviour
         float currentHeight = (TreeGrowth.Instance != null) ? TreeGrowth.Instance.CurrentHeight : (tree != null ? tree.localScale.y * 2f : 5.80f);
         float elapsed = (TreeGrowth.Instance != null) ? TreeGrowth.Instance.ElapsedGrowthTime : 0f;
 
-        int slainBosses = (LevelBossManager.Instance != null) ? LevelBossManager.Instance.DefeatedBossCount : 0;
-
-        // المستوى 2: يفتح حصراً وفقط بعد هزيمة زعيم المستوى الأول (Forest Goliath)
-        if (levels != null && levels.Length > 1 && !unlocked[1] && slainBosses >= 1)
+        // المستوى 2: يفتح أوتوماتيكياً بعد مرور 18 ثانية أو عند وصول الشجرة لارتفاع 15.0م
+        if (levels != null && levels.Length > 1 && !unlocked[1] && (elapsed >= 18.0f || currentHeight >= 15.0f))
         {
             UnlockLevel(1);
         }
 
-        // المستوى 3: يفتح حصراً وفقط بعد هزيمة زعيم المستوى الثاني (Inferno Titan)
-        if (levels != null && levels.Length > 2 && !unlocked[2] && slainBosses >= 2)
+        // المستوى 3: يفتح أوتوماتيكياً بعد مرور 36 ثانية أو عند وصول الشجرة لارتفاع 25.0م
+        if (levels != null && levels.Length > 2 && !unlocked[2] && (elapsed >= 36.0f || currentHeight >= 25.0f))
         {
             UnlockLevel(2);
         }
 
-        // القمة (TopLevel): تفتح حصراً وفقط بعد هزيمة الزعماء الثلاثة جميعهم
-        if (levels != null && levels.Length > 3 && !unlocked[3] && slainBosses >= 3)
+        // القمة (TopLevel): تفتح أوتوماتيكياً بعد مرور 54 ثانية أو عند وصول الشجرة لارتفاع 39.5م وتلتصق بالمنصة تماماً
+        if (levels != null && levels.Length > 3 && !unlocked[3] && (elapsed >= 54.0f || currentHeight >= 39.5f))
         {
             UnlockLevel(3);
         }

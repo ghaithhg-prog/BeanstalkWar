@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Netcode;
 using System.Collections;
+using System.Collections.Generic;
 
 public class CrystalItem : NetworkBehaviour
 {
@@ -64,6 +65,7 @@ public class CrystalItem : NetworkBehaviour
     void Awake()
     {
         Instance = this;
+        SetupVisualCrystalGem();
     }
 
     private bool hasSpawnedOnField = false;
@@ -71,6 +73,7 @@ public class CrystalItem : NetworkBehaviour
 
     void Start()
     {
+        SetupVisualCrystalGem();
         FindTopSpawnPoint();
         FindGroundSpawnPoints();
 
@@ -209,11 +212,10 @@ public class CrystalItem : NetworkBehaviour
         Vector3 spawnPos = Vector3.zero;
         bool foundPoint = false;
 
-        // 1. الأولوية المطلقة: الظهور في القمة داخل مهد الوردة المتفتحة (Top Level Flower Sanctum Cradle)
+        // 1. الأولوية المطلقة: الظهور في القمة داخل مهد الوردة المتفتحة طافية في الهواء دون أي تداخل
         if (topSpawnPoint != null)
         {
-            Vector3 topPos = topSpawnPoint.position + Vector3.up * 0.95f;
-            spawnPos = GetValidGroundNavMeshPosition(topPos);
+            spawnPos = topSpawnPoint.position + Vector3.up * 1.6f;
             foundPoint = true;
         }
         else if (groundSpawnPoints != null && groundSpawnPoints.Length > 0)
@@ -221,7 +223,7 @@ public class CrystalItem : NetworkBehaviour
             int idx = Random.Range(0, groundSpawnPoints.Length);
             if (groundSpawnPoints[idx] != null)
             {
-                spawnPos = GetValidGroundNavMeshPosition(groundSpawnPoints[idx].position);
+                spawnPos = groundSpawnPoints[idx].position + Vector3.up * 1.2f;
                 foundPoint = true;
             }
         }
@@ -287,6 +289,13 @@ public class CrystalItem : NetworkBehaviour
         if (isCarried.Value && IsLocalPlayerCarrier())
         {
             HandleCarrierInput();
+        }
+
+        // طوفان سحري مهيب ودوران للكريستالة في الهواء لمنع أي التصاق أو تداخل مع المنصة
+        if (!isCarried.Value && visualModel != null && visualModel.activeInHierarchy)
+        {
+            visualModel.transform.Rotate(0f, 32f * Time.deltaTime, 0f, Space.World);
+            visualModel.transform.localPosition = new Vector3(0f, 0.35f + Mathf.Sin(Time.time * 2.2f) * 0.14f, 0f);
         }
     }
 
@@ -609,5 +618,133 @@ public class CrystalItem : NetworkBehaviour
             audioSource.PlayOneShot(pickupSound);
         else if (soundIndex == 1 && dropSound != null)
             audioSource.PlayOneShot(dropSound);
+    }
+
+    /// <summary>
+    /// توليد مجسم الكريستالة السحرية المشحوذة (Faceted Gemstone Mesh)
+    /// لاستبدال شكل البيضة البيضاوية السابقة بكريستالة أسطورية حقيقية متعددة الأوجه
+    /// </summary>
+    public static Mesh GenerateFacetedCrystalMesh()
+    {
+        Mesh mesh = new Mesh();
+        mesh.name = "FacetedSacredGem";
+
+        int sides = 8;
+        float heightApex = 1.25f;
+        float heightUpper = 0.55f;
+        float heightLower = -0.55f;
+        float radiusUpper = 0.55f;
+        float radiusWaist = 0.85f;
+        float radiusLower = 0.55f;
+
+        Vector3 topApex = new Vector3(0f, heightApex, 0f);
+        Vector3 bottomApex = new Vector3(0f, -heightApex, 0f);
+
+        Vector3[] upperRing = new Vector3[sides];
+        Vector3[] waistRing = new Vector3[sides];
+        Vector3[] lowerRing = new Vector3[sides];
+
+        for (int i = 0; i < sides; i++)
+        {
+            float angle = (i / (float)sides) * Mathf.PI * 2f;
+            float cos = Mathf.Cos(angle);
+            float sin = Mathf.Sin(angle);
+
+            upperRing[i] = new Vector3(cos * radiusUpper, heightUpper, sin * radiusUpper);
+            waistRing[i] = new Vector3(cos * radiusWaist, 0f, sin * radiusWaist);
+            lowerRing[i] = new Vector3(cos * radiusLower, heightLower, sin * radiusLower);
+        }
+
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+        List<Vector3> normals = new List<Vector3>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        void AddTriangle(Vector3 v0, Vector3 v1, Vector3 v2)
+        {
+            int startIndex = vertices.Count;
+            vertices.Add(v0);
+            vertices.Add(v1);
+            vertices.Add(v2);
+
+            Vector3 norm = Vector3.Cross(v1 - v0, v2 - v0).normalized;
+            normals.Add(norm);
+            normals.Add(norm);
+            normals.Add(norm);
+
+            uvs.Add(new Vector2(0.5f, 1f));
+            uvs.Add(new Vector2(0f, 0f));
+            uvs.Add(new Vector2(1f, 0f));
+
+            triangles.Add(startIndex);
+            triangles.Add(startIndex + 1);
+            triangles.Add(startIndex + 2);
+        }
+
+        void AddQuad(Vector3 v00, Vector3 v10, Vector3 v11, Vector3 v01)
+        {
+            AddTriangle(v00, v10, v11);
+            AddTriangle(v00, v11, v01);
+        }
+
+        for (int i = 0; i < sides; i++)
+        {
+            int next = (i + 1) % sides;
+
+            // 1. القمة العلوية
+            AddTriangle(topApex, upperRing[next], upperRing[i]);
+
+            // 2. أوجه الحزام العلوي
+            AddQuad(upperRing[i], upperRing[next], waistRing[next], waistRing[i]);
+
+            // 3. أوجه الحزام السفلي
+            AddQuad(waistRing[i], waistRing[next], lowerRing[next], lowerRing[i]);
+
+            // 4. القمة السفلية
+            AddTriangle(bottomApex, lowerRing[i], lowerRing[next]);
+        }
+
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.SetNormals(normals);
+        mesh.SetUVs(0, uvs);
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+
+    void SetupVisualCrystalGem()
+    {
+        if (visualModel == null)
+        {
+            Transform vTr = transform.Find("CrystalVisual");
+            if (vTr != null) visualModel = vTr.gameObject;
+        }
+
+        if (visualModel != null)
+        {
+            MeshFilter mf = visualModel.GetComponent<MeshFilter>();
+            if (mf != null)
+            {
+                mf.sharedMesh = GenerateFacetedCrystalMesh();
+            }
+
+            visualModel.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f);
+
+            MeshRenderer mr = visualModel.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+                mat.color = new Color(0.2f, 0.88f, 0.98f, 0.95f);
+                mat.SetFloat("_Smoothness", 0.95f);
+                mat.SetFloat("_Metallic", 0.05f);
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", new Color(0.15f, 0.9f, 1.0f) * 2.2f);
+                mr.material = mat;
+            }
+
+            Collider col = visualModel.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+        }
     }
 }

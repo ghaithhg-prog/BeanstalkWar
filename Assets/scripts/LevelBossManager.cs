@@ -230,7 +230,7 @@ public class LevelBossManager : MonoBehaviour
         };
 
         Vector3 spawnPos = (levelTr != null)
-            ? new Vector3(levelTr.position.x, Mathf.Max(levelTr.position.y + 1.5f, expectedY), levelTr.position.z)
+            ? new Vector3(levelTr.position.x, expectedY, levelTr.position.z)
             : new Vector3(0f, expectedY, 0f);
 
         // بناء شبكة الملاحة أولاً لضمان وجود سطح ملاحة حقيقي تحت قدمي الزعيم الجديد لمنع سقوطه للطابق السفلي

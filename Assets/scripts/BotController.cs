@@ -455,9 +455,9 @@ public class BotController : NetworkBehaviour
                 }
             }
 
-            Transform highestLevel = GetHighestCombatLevel();
-            // إذا كان الطابق القتالي النشط (Level 1, 2, 3) أعلى من موقع البوت الحالي، يصعد فوراً عبر الممرات!
-            if (highestLevel != null && (highestLevel.position.y - transform.position.y) > 2.0f)
+            Transform targetLevel = GetBotCurrentCombatTargetLevel();
+            // إذا كان الطابق القتالي النشط (Level 1, 2, 3, TopLevel) أعلى من موقع البوت الحالي، يصعد فوراً عبر الممرات!
+            if (targetLevel != null && (targetLevel.position.y - transform.position.y) > 2.0f)
             {
                 currentState = BotState.Advance;
                 hasDestination = false;
@@ -478,9 +478,18 @@ public class BotController : NetworkBehaviour
             return;
         }
 
-        // 8. إذا كان حامياً (Protector): حراسة المنصات والدفاع عن الشجرة
+        // 8. إذا كان حامياً (Protector): حراسة المنصات والدفاع عن الشجرة والارتقاء نحو طابق الزعيم
         if (team == PlayerMovement.TeamType.Protector)
         {
+            Transform targetLevel = GetBotCurrentCombatTargetLevel();
+            if (targetLevel != null && (targetLevel.position.y - transform.position.y) > 2.0f)
+            {
+                currentState = BotState.Advance;
+                hasDestination = false;
+                currentTargetLevel = null;
+                return;
+            }
+
             if (currentState == BotState.Defend)
             {
                 if (Time.time - defendStartTime > 4f)
@@ -810,42 +819,73 @@ public class BotController : NetworkBehaviour
 
     void UpdateAdvance()
     {
-        Transform highestLevel = GetHighestCombatLevel();
+        Transform targetLevel = GetBotCurrentCombatTargetLevel();
 
-        if (highestLevel == null)
+        if (targetLevel == null)
         {
             if (!hasDestination)
                 SetNewDestination(FindClosestTreePosition());
             return;
         }
 
-        if (currentTargetLevel != highestLevel)
+        if (currentTargetLevel != targetLevel)
         {
-            currentTargetLevel = highestLevel;
-            Vector3 newTarget = FindPointOnLevel(highestLevel);
+            currentTargetLevel = targetLevel;
+            Vector3 newTarget = FindPointOnLevel(targetLevel);
             SetNewDestination(newTarget);
             return;
         }
 
         if (!hasDestination)
         {
-            Vector3 newTarget = FindPointOnLevel(highestLevel);
+            Vector3 newTarget = FindPointOnLevel(targetLevel);
             SetNewDestination(newTarget);
         }
     }
 
-    Transform GetHighestCombatLevel()
+    /// <summary>
+    /// يحدد الطابق القتالي الذي يجب على البوتات التواجد فيه حالياً:
+    /// 1. طالما الزعيم 1 حي، يبقى كل البوتات في المستوى 1 ولا يصعدون للأعلى أبداً.
+    /// 2. عند موت الزعيم 1، يصعدون للمستوى 2 لقتال الزعيم 2.
+    /// 3. عند موت الزعيم 2، يصعدون للمستوى 3 لقتال الزعيم 3.
+    /// 4. عند موت الزعماء الثلاثة، يصعدون لقمة الشجرة (TopLevel) للكريستال وللعرش.
+    /// </summary>
+    Transform GetBotCurrentCombatTargetLevel()
     {
-        if (levelTargets == null) return null;
-
-        for (int i = levelTargets.Length - 1; i >= 0; i--)
+        // 1. إذا كان هناك زعيم حي ومستيقظ، فالطابق القتالي الإلزامي للبوتات هو طابق ذلك الزعيم تحديداً
+        if (LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
         {
-            Transform level = levelTargets[i];
-            if (level == null || !level.gameObject.activeInHierarchy) continue;
-            return level;
+            LevelBoss activeBoss = LevelBossManager.Instance.GetActiveAwakenedBoss();
+            if (activeBoss != null)
+            {
+                int targetLvlIndex = activeBoss.levelNumber - 1; // Level 1 -> index 0, Level 2 -> index 1, Level 3 -> index 2
+                if (levelTargets != null && targetLvlIndex >= 0 && targetLvlIndex < levelTargets.Length)
+                {
+                    Transform targetFloor = levelTargets[targetLvlIndex];
+                    if (targetFloor != null && targetFloor.gameObject.activeInHierarchy)
+                    {
+                        return targetFloor;
+                    }
+                }
+            }
+        }
+
+        // 2. إذا هُزم الزعماء الثلاثة جميعهم، يصبح الهدف هو قمة الشجرة (TopLevel)
+        if (levelTargets != null && levelTargets.Length > 0)
+        {
+            for (int i = levelTargets.Length - 1; i >= 0; i--)
+            {
+                Transform level = levelTargets[i];
+                if (level != null && level.gameObject.activeInHierarchy) return level;
+            }
         }
 
         return null;
+    }
+
+    Transform GetHighestCombatLevel()
+    {
+        return GetBotCurrentCombatTargetLevel();
     }
 
     void SetNewDestination(Vector3 destination)
