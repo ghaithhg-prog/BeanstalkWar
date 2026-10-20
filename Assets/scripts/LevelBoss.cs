@@ -46,6 +46,28 @@ public class LevelBoss : NetworkBehaviour
         };
     }
 
+    public float GetExpectedMaxHealth()
+    {
+        return levelNumber switch
+        {
+            1 => 4500f,
+            2 => 6500f,
+            3 => 9000f,
+            _ => 5000f
+        };
+    }
+
+    public float GetExpectedAttackDamage()
+    {
+        return levelNumber switch
+        {
+            1 => 42f,
+            2 => 60f,
+            3 => 80f,
+            _ => 45f
+        };
+    }
+
     void Awake()
     {
         // حماية هامة: إذا كان الزعيم موضوعاً كابن لمنصة ذات مقياس كبير، نخرجه منها لتجنب تضخم الحجم وتشوه الحركة
@@ -142,12 +164,19 @@ public class LevelBoss : NetworkBehaviour
             transform.rotation = worldRot;
         }
 
-        // إيقاف وحذف أي BotController على الزعيم لمنع تعارض الذكاء الاصطناعي مع تحكم الزعيم
+        // إيقاف وحذف أي BotController أو PlayerXP على الزعيم لمنع أي تعارض
         BotController bc = GetComponent<BotController>();
         if (bc != null)
         {
             bc.enabled = false;
             Destroy(bc);
+        }
+
+        PlayerXP pxp = GetComponent<PlayerXP>();
+        if (pxp != null)
+        {
+            pxp.enabled = false;
+            Destroy(pxp);
         }
 
         // 0. تأمين الريجيدبودي لمنع السقوط مع الجاذبية
@@ -169,14 +198,9 @@ public class LevelBoss : NetworkBehaviour
             pm.team = PlayerMovement.TeamType.Boss;
         }
 
-        // 3. ضبط الصحة - ضمان قيم قوية مستحيل تموت من ضربات قليلة
-        if (maxBossHealth < 4000f)
-        {
-            if (levelNumber == 1) maxBossHealth = 4500f;
-            else if (levelNumber == 2) maxBossHealth = 6500f;
-            else if (levelNumber == 3) maxBossHealth = 9000f;
-            else maxBossHealth = 5000f;
-        }
+        // 3. ضبط الصحة - ضمان قيم قوية كاملة ومطابقة لمستوى الزعيم
+        maxBossHealth = GetExpectedMaxHealth();
+        attackDamage = GetExpectedAttackDamage();
 
         health = GetComponent<Health>();
         if (health != null)
@@ -191,12 +215,6 @@ public class LevelBoss : NetworkBehaviour
         if (combat != null)
         {
             combat.team = PlayerMovement.TeamType.Boss;
-            if (attackDamage < 25f)
-            {
-                if (levelNumber == 1) attackDamage = 38f;
-                else if (levelNumber == 2) attackDamage = 55f;
-                else if (levelNumber == 3) attackDamage = 75f;
-            }
             combat.attackDamage = attackDamage;
             combat.attackRange = 4.0f; // مدى ضربة أوسع لأنه عملاق
             combat.attackCooldown = 1.2f;
@@ -430,7 +448,6 @@ public class LevelBoss : NetworkBehaviour
         }
     }
 
-    private bool hasBossBeenAwakenedBefore = false;
 
     /// <summary>إيقاظ فوري ومباشر للزعيم عند فتح مستواه من قبل TreeLevelManager</summary>
     public void AwakenBossNow(Vector3 platformPos)
@@ -447,16 +464,24 @@ public class LevelBoss : NetworkBehaviour
         transform.position = guardCenter;
         SetBossDormant(false);
 
+        maxBossHealth = GetExpectedMaxHealth();
+        attackDamage = GetExpectedAttackDamage();
+
         if (health == null) health = GetComponent<Health>();
-        if (!hasBossBeenAwakenedBefore)
+        if (health != null)
         {
-            hasBossBeenAwakenedBefore = true;
-            if (health != null)
-            {
-                health.maxHealth = maxBossHealth;
-                health.currentHealth = maxBossHealth;
-                health.isDead = false;
-            }
+            health.maxHealth = maxBossHealth;
+            health.currentHealth = maxBossHealth;
+            health.isDead = false;
+        }
+
+        if (combat == null) combat = GetComponent<CharacterCombat>();
+        if (combat != null)
+        {
+            combat.team = PlayerMovement.TeamType.Boss;
+            combat.attackDamage = attackDamage;
+            combat.attackRange = 4.0f;
+            combat.attackCooldown = 1.2f;
         }
 
         if (agent != null)

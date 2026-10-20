@@ -46,6 +46,13 @@ public class CharacterCombat : NetworkBehaviour
 
     void Start()
     {
+        // حماية قطعية: إذا كان هذا الكائن زعيماً (LevelBoss)، فإنه يملك إعدادات قوة وصحة خاصة ومستقلة
+        // ولا نطبق عليه سمات الشخصيات العادية الـ 200HP إطلاقاً
+        if (GetComponent<LevelBoss>() != null)
+        {
+            return;
+        }
+
         // إذا وجد BotController
         // فهذا ليس لاعبًا بشريًا.
         isBot =
@@ -64,6 +71,11 @@ public class CharacterCombat : NetworkBehaviour
 
     void ApplyCharacterData()
     {
+        if (GetComponent<LevelBoss>() != null)
+        {
+            return;
+        }
+
         attackDamage =
             characterData.attackDamage;
 

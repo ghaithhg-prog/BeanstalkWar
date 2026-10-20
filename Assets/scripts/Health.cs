@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 using TMPro;
 
@@ -23,8 +23,9 @@ public class Health : MonoBehaviour
         LevelBoss boss = GetComponent<LevelBoss>();
         if (boss != null)
         {
-            maxHealth = boss.maxBossHealth;
-            currentHealth = boss.maxBossHealth;
+            float bossHp = boss.GetExpectedMaxHealth();
+            maxHealth = bossHp;
+            currentHealth = bossHp;
         }
         else if (currentHealth <= 0f)
         {
@@ -45,8 +46,12 @@ public class Health : MonoBehaviour
         LevelBoss boss = GetComponent<LevelBoss>();
         if (boss != null)
         {
-            maxHealth = boss.maxBossHealth;
-            if (!initialized || currentHealth <= 0f) currentHealth = boss.maxBossHealth;
+            float bossHp = boss.GetExpectedMaxHealth();
+            maxHealth = bossHp;
+            if (currentHealth < 1000f || currentHealth <= 0f)
+            {
+                currentHealth = bossHp;
+            }
             isDead = false;
             initialized = true;
         }

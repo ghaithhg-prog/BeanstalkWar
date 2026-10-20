@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Unity.Netcode;
 
 public class PlayerMovement : NetworkBehaviour
@@ -860,6 +860,12 @@ public class PlayerMovement : NetworkBehaviour
 
     void Start()
     {
+        if (GetComponent<LevelBoss>() != null)
+        {
+            // الزعيم يتم التحكم بفيزيائه وجاذبيته وحركته حصرياً عبر LevelBoss لمنع أي سقوط أو تعارض
+            return;
+        }
+
         if (rb == null) rb = GetComponent<Rigidbody>();
 
         if (rb != null)
