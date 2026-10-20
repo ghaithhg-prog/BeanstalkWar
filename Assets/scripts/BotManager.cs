@@ -4,7 +4,19 @@ using System.Collections.Generic;
 
 public class BotManager : MonoBehaviour
 {
-    public static BotManager Instance;
+    private static BotManager _instance;
+    public static BotManager Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = FindAnyObjectByType<BotManager>();
+            }
+            return _instance;
+        }
+        set => _instance = value;
+    }
 
     [Header("Bot")]
     public GameObject botPrefab;
@@ -16,7 +28,7 @@ public class BotManager : MonoBehaviour
 
     void Awake()
     {
-        Instance = this;
+        _instance = this;
     }
 
     // =========================
@@ -36,26 +48,31 @@ public class BotManager : MonoBehaviour
             !NetworkManager.Singleton.IsServer)
             return;
 
-        if (botPrefab == null ||
-            characterDatabase == null)
+        if (botPrefab == null)
         {
-            Debug.LogError(
-                "BotManager references are missing."
-            );
+            botPrefab = Resources.Load<GameObject>("Prefabs/Bot");
+        }
 
+        if (characterDatabase == null)
+        {
+            characterDatabase = Resources.Load<CharacterDatabase>("Characters/CharacterDatabase");
+        }
+
+        if (botPrefab == null || characterDatabase == null)
+        {
+            Debug.LogError("BotManager references are missing.");
             return;
         }
 
         offlineBotsCreated = true;
 
-        PlayerMovement.TeamType humanTeam =
-            humanPlayer.networkTeam.Value;
+        PlayerMovement.TeamType humanTeam = humanPlayer.hasSelectedTeam.Value
+            ? humanPlayer.networkTeam.Value
+            : humanPlayer.team;
 
-        PlayerMovement.TeamType enemyTeam =
-            humanTeam ==
-            PlayerMovement.TeamType.Protector
-                ? PlayerMovement.TeamType.Destroyer
-                : PlayerMovement.TeamType.Protector;
+        PlayerMovement.TeamType enemyTeam = humanTeam == PlayerMovement.TeamType.Protector
+            ? PlayerMovement.TeamType.Destroyer
+            : PlayerMovement.TeamType.Protector;
 
         // =========================
         // فريق اللاعب
@@ -76,7 +93,7 @@ public class BotManager : MonoBehaviour
             );
         }
 
-        // اللاعب الحقيقي + 4 Bots
+        // اللاعب الحقيقي + 4 Bots بمواقع انتشار تكتيكية فريدة
         for (int i = 0; i < 4; i++)
         {
             CharacterData selected =
@@ -93,7 +110,8 @@ public class BotManager : MonoBehaviour
 
             SpawnBot(
                 humanTeam,
-                selected
+                selected,
+                i + 1
             );
         }
 
@@ -104,7 +122,7 @@ public class BotManager : MonoBehaviour
         List<CharacterData> enemyComposition =
             new List<CharacterData>();
 
-        // 5 Bots
+        // 5 Bots بمواقع انتشار تكتيكية فريدة
         for (int i = 0; i < 5; i++)
         {
             CharacterData selected =
@@ -121,7 +139,8 @@ public class BotManager : MonoBehaviour
 
             SpawnBot(
                 enemyTeam,
-                selected
+                selected,
+                i
             );
         }
 
@@ -336,27 +355,16 @@ public class BotManager : MonoBehaviour
 
     void SpawnBot(
         PlayerMovement.TeamType team,
-        CharacterData character)
+        CharacterData character,
+        int botIndex = -1)
     {
-        Transform spawnPoint =
-            null;
+        Vector3 position = (SpawnManager.Instance != null)
+            ? SpawnManager.Instance.GetSpawnPosition(team, botIndex)
+            : (team == PlayerMovement.TeamType.Protector ? new Vector3(-15f, 0.5f, 0f) : new Vector3(15f, 0.5f, 0f));
 
-        if (SpawnManager.Instance != null)
-        {
-            spawnPoint =
-                SpawnManager.Instance
-                    .GetSpawnPoint(team);
-        }
-
-        Vector3 position =
-            spawnPoint != null
-                ? spawnPoint.position
-                : Vector3.zero;
-
-        Quaternion rotation =
-            spawnPoint != null
-                ? spawnPoint.rotation
-                : Quaternion.identity;
+        Quaternion rotation = (team == PlayerMovement.TeamType.Protector)
+            ? Quaternion.LookRotation(Vector3.right)
+            : Quaternion.LookRotation(Vector3.left);
 
         GameObject botObject =
             Instantiate(
@@ -376,7 +384,34 @@ public class BotManager : MonoBehaviour
         {
             controller.team =
                 team;
+
+            if (character != null)
+            {
+                controller.moveSpeed = character.moveSpeed;
+            }
         }
+
+        UnityEngine.AI.NavMeshAgent agent =
+            botObject.GetComponent<UnityEngine.AI.NavMeshAgent>();
+
+        if (agent != null)
+        {
+            agent.baseOffset = 0.95f;
+            agent.enabled = true;
+            if (UnityEngine.AI.NavMesh.SamplePosition(position, out UnityEngine.AI.NavMeshHit hit, 6f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+            }
+            if (character != null)
+            {
+                agent.speed = character.moveSpeed;
+            }
+        }
+
+        // =========================
+        // Visuals: Full AAA 3D Medieval Model & Team Aura
+        // =========================
+        PlayerMovement.Attach3DModel(botObject, character, character.characterID, team);
 
         // =========================
         // Combat

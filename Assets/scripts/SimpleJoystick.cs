@@ -14,7 +14,15 @@ public class SimpleJoystick : MonoBehaviour, IDragHandler, IPointerUpHandler, IP
 
     void Start()
     {
-        startPos = handle.anchoredPosition;
+        RecalibrateStartPos();
+    }
+
+    public void RecalibrateStartPos()
+    {
+        if (handle != null)
+        {
+            startPos = handle.anchoredPosition;
+        }
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -53,7 +61,10 @@ public class SimpleJoystick : MonoBehaviour, IDragHandler, IPointerUpHandler, IP
 
     public void OnPointerUp(PointerEventData eventData)
     {
-        handle.anchoredPosition = startPos;
+        if (handle != null)
+        {
+            handle.anchoredPosition = startPos;
+        }
         inputVector = Vector2.zero;
     }
 }

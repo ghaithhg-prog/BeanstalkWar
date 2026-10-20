@@ -18,11 +18,11 @@ MonoBehaviour:
   characterIcon: {fileID: 0}
   role: 1
   maxPerTeam: 2
-  maxHealth: 100
+  maxHealth: 200
   attackDamage: 20
   attackCooldown: 1
   attackRange: 15
   moveSpeed: 6
-  jumpForce: 7
-  canDoubleJump: 0
+  jumpForce: 7.5
+  canDoubleJump: 1
   attackType: 1

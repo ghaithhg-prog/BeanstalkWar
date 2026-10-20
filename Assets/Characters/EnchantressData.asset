@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7e1af3c5db61ff479286a68bab28f1a, type: 3}
+  m_Name: EnchantressData
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  characterID: 16
+  characterName: Enchantress
+  description: 
+  characterIcon: {fileID: 0}
+  role: 3
+  maxPerTeam: 2
+  maxHealth: 160
+  attackDamage: 20
+  attackCooldown: 0.9
+  attackRange: 10
+  moveSpeed: 6
+  jumpForce: 7.2
+  canDoubleJump: 0
+  attackType: 1

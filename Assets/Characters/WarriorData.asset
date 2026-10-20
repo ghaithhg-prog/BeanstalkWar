@@ -18,7 +18,7 @@ MonoBehaviour:
   characterIcon: {fileID: 0}
   role: 1
   maxPerTeam: 2
-  maxHealth: 100
+  maxHealth: 200
   attackDamage: 20
   attackCooldown: 1
   attackRange: 2.5

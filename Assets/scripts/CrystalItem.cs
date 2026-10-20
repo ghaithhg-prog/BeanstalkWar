@@ -32,7 +32,7 @@ public class CrystalItem : NetworkBehaviour
     );
 
     [Header("Settings")]
-    public float pickupRadius = 2.5f;
+    public float pickupRadius = 3.2f;
     public float maxDroppedDuration = 25f;
     public float shockwaveRadius = 8f;
     public float shockwaveForce = 16f;
@@ -66,6 +66,21 @@ public class CrystalItem : NetworkBehaviour
         Instance = this;
     }
 
+    private bool hasSpawnedOnField = false;
+    private bool IsServerOrAuthority => NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;
+
+    void Start()
+    {
+        FindTopSpawnPoint();
+        FindGroundSpawnPoints();
+
+        if (IsServerOrAuthority && (LevelBossManager.Instance == null || !LevelBossManager.Instance.AreAllBossesDefeated))
+        {
+            hasSpawnedOnField = false;
+            ApplyVisualActiveLocal(false);
+        }
+    }
+
     public override void OnNetworkSpawn()
     {
         TreeGrowth.OnTreeReachedTopLevel += OnTreeReachedTopLevel;
@@ -76,16 +91,18 @@ public class CrystalItem : NetworkBehaviour
         FindTopSpawnPoint();
         FindGroundSpawnPoints();
 
-        if (IsServer)
+        if (IsServerOrAuthority)
         {
-            TreeGrowth tree = FindAnyObjectByType<TreeGrowth>();
-            if (tree != null && tree.IsMature)
+            bool allBossesSlain = LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated;
+            if (allBossesSlain)
             {
                 SpawnAtTopServer();
             }
             else
             {
-                SetVisualActiveRpc(false);
+                hasSpawnedOnField = false;
+                ApplyVisualActiveLocal(false);
+                if (IsSpawned) SetVisualActiveRpc(false);
             }
         }
     }
@@ -99,9 +116,12 @@ public class CrystalItem : NetworkBehaviour
 
     void OnTreeReachedTopLevel()
     {
-        if (IsServer)
+        if (IsServerOrAuthority)
         {
-            SpawnAtTopServer();
+            if (LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated)
+            {
+                SpawnAtTopServer();
+            }
         }
     }
 
@@ -113,6 +133,13 @@ public class CrystalItem : NetworkBehaviour
     {
         if (topSpawnPoint == null)
         {
+            GameObject cradle = GameObject.Find("CrystalSanctumCradle");
+            if (cradle != null)
+            {
+                topSpawnPoint = cradle.transform;
+                return;
+            }
+
             GameObject top = GameObject.Find("TopLevel");
             if (top != null)
                 topSpawnPoint = top.transform;
@@ -137,23 +164,27 @@ public class CrystalItem : NetworkBehaviour
         if (holder != null)
         {
             Transform[] children = holder.GetComponentsInChildren<Transform>();
-            // استبعاد الكائن الأب نفسه (العنصر الأول)
             var list = new System.Collections.Generic.List<Transform>(children);
-            list.RemoveAt(0); // remove the parent
+            if (list.Count > 0) list.RemoveAt(0); // remove the parent
             groundSpawnPoints = list.ToArray();
         }
     }
 
-    // الحصول على موضع على الأرض عبر Raycast
-    Vector3 GetGroundPosition(Transform point)
+    // الحصول على موضع صالح على الـ NavMesh والأرض لضمان وصول البوتات واللاعبين للكريستالة دائماً
+    Vector3 GetValidGroundNavMeshPosition(Vector3 candidate)
     {
-        if (point == null) return Vector3.zero;
         RaycastHit hit;
-        if (Physics.Raycast(point.position + Vector3.up * 2f, Vector3.down, out hit, 10f))
+        if (Physics.Raycast(candidate + Vector3.up * 5f, Vector3.down, out hit, 25f))
         {
-            return hit.point + Vector3.up * 0.2f;
+            candidate = hit.point + Vector3.up * 0.25f;
         }
-        return point.position + Vector3.up * 0.2f;
+
+        if (UnityEngine.AI.NavMesh.SamplePosition(candidate, out UnityEngine.AI.NavMeshHit navHit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+        {
+            return navHit.position + Vector3.up * 0.25f;
+        }
+
+        return candidate;
     }
 
     // =========================
@@ -163,39 +194,78 @@ public class CrystalItem : NetworkBehaviour
     [ContextMenu("Spawn At Top (Server)")]
     public void SpawnAtTopServer()
     {
-        if (!IsServer) return;
+        if (!IsServerOrAuthority) return;
+
+        // لا تظهر الكريستالة إلا بعد هزيمة الزعماء الثلاثة جميعاً!
+        if (LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
+        {
+            hasSpawnedOnField = false;
+            ApplyVisualActiveLocal(false);
+            if (IsSpawned) SetVisualActiveRpc(false);
+            return;
+        }
 
         FindTopSpawnPoint();
         FindGroundSpawnPoints();
 
-        Vector3 spawnPos;
+        Vector3 spawnPos = Vector3.zero;
+        bool foundPoint = false;
 
-        // إذا كانت هناك نقاط أرضية محددة، استخدم واحدة منها عشوائياً
-        if (groundSpawnPoints != null && groundSpawnPoints.Length > 0)
+        // 1. الأولوية المطلقة: الظهور في القمة داخل مهد الوردة المتفتحة (Top Level Flower Sanctum Cradle)
+        if (topSpawnPoint != null)
+        {
+            Vector3 topPos = topSpawnPoint.position + Vector3.up * 0.95f;
+            spawnPos = GetValidGroundNavMeshPosition(topPos);
+            foundPoint = true;
+        }
+        else if (groundSpawnPoints != null && groundSpawnPoints.Length > 0)
         {
             int idx = Random.Range(0, groundSpawnPoints.Length);
-            spawnPos = GetGroundPosition(groundSpawnPoints[idx]);
+            if (groundSpawnPoints[idx] != null)
+            {
+                spawnPos = GetValidGroundNavMeshPosition(groundSpawnPoints[idx].position);
+                foundPoint = true;
+            }
         }
-        else
+
+        // 2. إذا لم تكن هناك نقطة في القمة ولا أرضية، نضعها قرب الشجرة
+        if (!foundPoint)
         {
-            // الرجوع إلى الطريقة القديمة (أعلى الشجرة)
-            spawnPos = topSpawnPoint != null
-                ? topSpawnPoint.position + Vector3.up * 1.5f
-                : transform.position;
+            GameObject treeObj = GameObject.FindGameObjectWithTag("Tree");
+            Vector3 center = treeObj != null ? new Vector3(treeObj.transform.position.x, 0.5f, treeObj.transform.position.z) : new Vector3(0f, 0.5f, 0f);
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            Vector3 candidate = center + new Vector3(Mathf.Cos(angle) * 7.5f, 0.5f, Mathf.Sin(angle) * 7.5f);
+            spawnPos = GetValidGroundNavMeshPosition(candidate);
         }
 
         transform.position = spawnPos;
         transform.SetParent(null);
 
+        hasSpawnedOnField = true;
         isCarried.Value = false;
         carrierNetworkObjectId.Value = 0;
+        currentCarrierObj = null;
         isDropped.Value = false;
         resetTimer.Value = maxDroppedDuration;
 
-        SetVisualActiveRpc(true);
-        PlayResetFxRpc(spawnPos);
+        ApplyVisualActiveLocal(true);
+        if (IsSpawned)
+        {
+            SetVisualActiveRpc(true);
+            PlayResetFxRpc(spawnPos);
+        }
 
-        Debug.Log("Crystal spawned at position: " + spawnPos);
+        Debug.Log("💎 Sacred Crystal unsealed & spawned on NavMesh at position: " + spawnPos);
+    }
+
+    private void ApplyVisualActiveLocal(bool active)
+    {
+        if (visualModel != null) visualModel.SetActive(active);
+        if (glowLight != null) glowLight.enabled = active;
+        foreach (Renderer r in GetComponentsInChildren<Renderer>(true))
+        {
+            if (r != null) r.enabled = active;
+        }
     }
 
     // =========================
@@ -204,7 +274,7 @@ public class CrystalItem : NetworkBehaviour
 
     void Update()
     {
-        if (IsServer)
+        if (IsServerOrAuthority)
         {
             UpdateServerLogic();
         }
@@ -222,8 +292,37 @@ public class CrystalItem : NetworkBehaviour
         }
     }
 
+    public bool IsAvailableForPickup =>
+        !isCarried.Value &&
+        (LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated) &&
+        (hasSpawnedOnField || isDropped.Value || (visualModel != null && visualModel.activeInHierarchy));
+
     void UpdateServerLogic()
     {
+        // ضمان تلقائي: بمجرد موت الزعماء الثلاثة، إذا لم تكن الكريستالة قد ظهرت بعد على الأرض، نظهرها فوراً!
+        if (!hasSpawnedOnField && !isCarried.Value && !isDropped.Value &&
+            LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated)
+        {
+            SpawnAtTopServer();
+        }
+
+        if (isCarried.Value)
+        {
+            if (currentCarrierObj == null) ResolveCarrierObject();
+            if (currentCarrierObj == null)
+            {
+                DropCrystalServer();
+                return;
+            }
+
+            Health carrierHealth = currentCarrierObj.GetComponent<Health>();
+            if (carrierHealth != null && carrierHealth.isDead)
+            {
+                DropCrystalServer();
+                return;
+            }
+        }
+
         if (isDropped.Value)
         {
             resetTimer.Value -= Time.deltaTime;
@@ -236,7 +335,7 @@ public class CrystalItem : NetworkBehaviour
             }
         }
 
-        if (!isCarried.Value)
+        if (!isCarried.Value && IsAvailableForPickup)
         {
             CheckPickupOverlapServer();
         }
@@ -252,13 +351,25 @@ public class CrystalItem : NetworkBehaviour
 
         foreach (Collider hit in hits)
         {
-            PlayerMovement pm = hit.GetComponent<PlayerMovement>();
+            if (hit == null) continue;
+
+            PlayerMovement pm = hit.GetComponentInParent<PlayerMovement>();
             if (pm != null && pm.team == PlayerMovement.TeamType.Protector)
             {
-                Health health = hit.GetComponent<Health>();
+                Health health = pm.GetComponent<Health>();
                 if (health != null && health.isDead) continue;
 
                 TryPickupServer(pm.gameObject);
+                break;
+            }
+
+            BotController bot = hit.GetComponentInParent<BotController>();
+            if (bot != null && bot.team == PlayerMovement.TeamType.Protector)
+            {
+                Health health = bot.GetComponent<Health>();
+                if (health != null && health.isDead) continue;
+
+                TryPickupServer(bot.gameObject);
                 break;
             }
         }
@@ -266,29 +377,42 @@ public class CrystalItem : NetworkBehaviour
 
     public void TryPickupServer(GameObject protectorObj)
     {
-        if (!IsServer || isCarried.Value) return;
+        if (!IsServerOrAuthority || isCarried.Value || protectorObj == null || !IsAvailableForPickup) return;
 
-        NetworkObject netObj = protectorObj.GetComponent<NetworkObject>();
-        if (netObj == null) return;
+        NetworkObject netObj = protectorObj.GetComponentInParent<NetworkObject>();
+        GameObject rootObj = netObj != null ? netObj.gameObject : protectorObj;
 
-        PlayerMovement pm = protectorObj.GetComponent<PlayerMovement>();
-        if (pm == null || pm.team != PlayerMovement.TeamType.Protector) return;
+        Health health = rootObj.GetComponent<Health>();
+        if (health != null && health.isDead) return;
+
+        PlayerMovement pm = rootObj.GetComponent<PlayerMovement>();
+        BotController bot = rootObj.GetComponent<BotController>();
+
+        bool isProtectorPlayer = (pm != null && pm.team == PlayerMovement.TeamType.Protector);
+        bool isProtectorBot = (bot != null && bot.team == PlayerMovement.TeamType.Protector);
+
+        if (!isProtectorPlayer && !isProtectorBot) return;
 
         isCarried.Value = true;
-        carrierNetworkObjectId.Value = netObj.NetworkObjectId;
+        carrierNetworkObjectId.Value = netObj != null ? netObj.NetworkObjectId : 0;
         isDropped.Value = false;
         resetTimer.Value = maxDroppedDuration;
 
-        pm.isCarryingCrystal.Value = true;
-        currentCarrierObj = protectorObj;
+        if (pm != null)
+        {
+            pm.isCarryingCrystal.Value = true;
+        }
 
-        PlaySoundRpc(0);
-        Debug.Log("Crystal picked up by Protector: " + protectorObj.name);
+        currentCarrierObj = rootObj;
+
+        ApplyVisualActiveLocal(true);
+        if (IsSpawned) PlaySoundRpc(0);
+        Debug.Log("💎 Crystal picked up by Protector: " + rootObj.name);
     }
 
     public void DropCrystalServer()
     {
-        if (!IsServer || !isCarried.Value) return;
+        if (!IsServerOrAuthority || !isCarried.Value) return;
 
         if (currentCarrierObj != null)
         {
@@ -297,12 +421,7 @@ public class CrystalItem : NetworkBehaviour
                 pm.isCarryingCrystal.Value = false;
         }
 
-        Vector3 dropPos = transform.position;
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out hit, 10f))
-        {
-            dropPos = hit.point + Vector3.up * 0.3f;
-        }
+        Vector3 dropPos = GetValidGroundNavMeshPosition(transform.position);
 
         transform.position = dropPos;
         transform.SetParent(null);
@@ -314,8 +433,13 @@ public class CrystalItem : NetworkBehaviour
         isDropped.Value = true;
         resetTimer.Value = maxDroppedDuration;
 
-        PlaySoundRpc(1);
-        Debug.Log("Crystal dropped on the ground!");
+        ApplyVisualActiveLocal(true);
+        if (IsSpawned)
+        {
+            SetVisualActiveRpc(true);
+            PlaySoundRpc(1);
+        }
+        Debug.Log("💎 Crystal dropped on the ground at: " + dropPos);
     }
 
     // =========================
@@ -324,16 +448,29 @@ public class CrystalItem : NetworkBehaviour
 
     void HandleCarrierInput()
     {
-        if (Input.GetKeyDown(KeyCode.E) && Time.time >= nextShockwaveTime)
+        if (Input.GetKeyDown(KeyCode.E))
         {
-            nextShockwaveTime = Time.time + shockwaveCooldown;
-            RequestShockwaveRpc();
+            TriggerCarrierShockwave();
         }
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
-            RequestDropRpc();
+            TriggerCarrierDrop();
         }
+    }
+
+    public void TriggerCarrierShockwave()
+    {
+        if (Time.time >= nextShockwaveTime)
+        {
+            nextShockwaveTime = Time.time + shockwaveCooldown;
+            RequestShockwaveRpc();
+        }
+    }
+
+    public void TriggerCarrierDrop()
+    {
+        RequestDropRpc();
     }
 
     [Rpc(SendTo.Server)]
@@ -419,8 +556,9 @@ public class CrystalItem : NetworkBehaviour
     public bool IsCarrier(GameObject obj)
     {
         if (!isCarried.Value || obj == null) return false;
+        if (currentCarrierObj == obj) return true;
         NetworkObject netObj = obj.GetComponent<NetworkObject>();
-        return netObj != null && netObj.NetworkObjectId == carrierNetworkObjectId.Value;
+        return netObj != null && carrierNetworkObjectId.Value != 0 && netObj.NetworkObjectId == carrierNetworkObjectId.Value;
     }
 
     public GameObject GetCarrierObject()

@@ -27,6 +27,12 @@ public class NetworkTreeState : NetworkBehaviour
             return;
         }
 
+        GameObject topLevelObj = GameObject.Find("TopLevel");
+        if (topLevelObj != null)
+        {
+            maxHeight = topLevelObj.transform.position.y + topLevelObj.transform.localScale.y * 0.5f;
+        }
+
         if (IsServer)
         {
             networkHeight.Value =

@@ -9,6 +9,8 @@ public class BotController : NetworkBehaviour
         Defend,
         Advance,
         Fight,
+        AttackTree,
+        FetchCrystal,
         DeliverCrystal,
         EscortCarrier,
         HuntCarrier,
@@ -65,14 +67,50 @@ public class BotController : NetworkBehaviour
     private float defendStartTime;
     private float fightStartTime;
     private float destinationSetTime;
+    private float nextStrafeTime = 0f;
+    private float currentStrafeSign = 1f;
+    private float nextRepathTime = 0f;
+
+    private bool IsServerOrAuthority => NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;
+
+    void OnEnable()
+    {
+        LevelBossManager.OnSingleBossDefeated += HandleBossDefeated;
+    }
+
+    void OnDisable()
+    {
+        LevelBossManager.OnSingleBossDefeated -= HandleBossDefeated;
+    }
+
+    void HandleBossDefeated(string title, string killer, PlayerMovement.TeamType killerTeam, int level)
+    {
+        LeaveFight();
+        hasDestination = false;
+        currentTargetLevel = null;
+    }
+
+    void Start()
+    {
+        if (IsServerOrAuthority && agent == null)
+        {
+            InitializeBotServer();
+        }
+    }
 
     public override void OnNetworkSpawn()
     {
-        enabled = IsServer;
+        enabled = IsServerOrAuthority;
 
-        if (!IsServer)
+        if (!IsServerOrAuthority)
             return;
 
+        InitializeBotServer();
+    }
+
+    void InitializeBotServer()
+    {
+        if (agent != null) return;
         agent = GetComponent<NavMeshAgent>();
 
         if (agent == null)
@@ -101,13 +139,43 @@ public class BotController : NetworkBehaviour
         agent.avoidancePriority = Random.Range(20, 80);
     }
 
+    public void OnRespawn(Vector3 targetSpawnPos)
+    {
+        if (agent == null) agent = GetComponent<NavMeshAgent>();
+        if (agent != null)
+        {
+            agent.enabled = true;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(targetSpawnPos, out hit, 10f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+                agentReady = true;
+            }
+            else
+            {
+                transform.position = targetSpawnPos;
+                agentReady = false;
+            }
+            agent.isStopped = false;
+            agent.ResetPath();
+        }
+
+        hasDestination = false;
+        currentTargetLevel = null;
+        enemyTarget = null;
+        enabled = true;
+        ChooseInitialState();
+        nextDecisionTime = Time.time;
+        Debug.Log($"🤖 Bot {gameObject.name} successfully respawned and resumed mission!");
+    }
+
     void PrepareAgent()
     {
         if (agent == null) return;
 
         NavMeshHit hit;
 
-        if (NavMesh.SamplePosition(transform.position, out hit, 5f, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(transform.position, out hit, 8f, NavMesh.AllAreas))
         {
             agent.Warp(hit.position);
             agentReady = true;
@@ -120,7 +188,12 @@ public class BotController : NetworkBehaviour
 
     void FindTree()
     {
-        GameObject tree = GameObject.FindGameObjectWithTag("Tree");
+        if (TreeGrowth.Instance != null)
+        {
+            treeTarget = TreeGrowth.Instance.transform;
+            return;
+        }
+        GameObject tree = GameObject.FindGameObjectWithTag("Tree") ?? GameObject.Find("Tree");
         if (tree != null) treeTarget = tree.transform;
     }
 
@@ -166,9 +239,14 @@ public class BotController : NetworkBehaviour
 
     void Update()
     {
-        if (!IsServer || agent == null) return;
+        if (!IsServerOrAuthority || agent == null) return;
 
-        if (GameStateManager.Instance == null || !GameStateManager.Instance.IsPlaying())
+        if (GameStateManager.Instance == null)
+        {
+            GameStateManager.Instance = FindAnyObjectByType<GameStateManager>();
+        }
+
+        if (GameStateManager.Instance != null && !GameStateManager.Instance.IsPlaying())
         {
             if (agent.isOnNavMesh) agent.isStopped = true;
             return;
@@ -188,13 +266,20 @@ public class BotController : NetworkBehaviour
 
         agent.isStopped = false;
 
-        if (hasDestination &&
-            Vector3.Distance(transform.position, currentDestination) > 1f &&
-            Time.time - destinationSetTime > 5f)
+        if (hasDestination)
         {
-            hasDestination = false;
-            currentTargetLevel = null;
+            bool arrived = !agent.pathPending && (agent.remainingDistance <= agent.stoppingDistance + 0.4f || Vector3.Distance(transform.position, currentDestination) <= 1.2f);
+            bool timedOut = Time.time - destinationSetTime > 5.5f;
+
+            if (arrived || timedOut)
+            {
+                hasDestination = false;
+                currentTargetLevel = null;
+            }
         }
+
+        // حماية تامة من اختراق جذع الشجرة
+        EnforceTreeTrunkAvoidance();
 
         if (Time.time >= nextDecisionTime)
         {
@@ -214,6 +299,14 @@ public class BotController : NetworkBehaviour
 
             case BotState.Fight:
                 UpdateFight();
+                break;
+
+            case BotState.AttackTree:
+                UpdateAttackTree();
+                break;
+
+            case BotState.FetchCrystal:
+                UpdateFetchCrystal();
                 break;
 
             case BotState.DeliverCrystal:
@@ -236,60 +329,131 @@ public class BotController : NetworkBehaviour
 
     void UpdateDecision()
     {
-        if (treeTarget == null) FindTree();
-        if (levelTargets == null || levelTargets.Length == 0) FindLevels();
+        if (treeTarget == null || !treeTarget.gameObject.activeInHierarchy) FindTree();
+        if (levelTargets == null || levelTargets.Length == 0 || levelTargets[0] == null) FindLevels();
 
-        // 1. إذا كان البوت يحمل الكريستالة، هدفه الوحيد إيصالها للمذبح
+        bool allBossesSlain = LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated;
+
+        // 1. إذا كان هذا البوت يحمل الكريستالة، هدفه الحتمي إيصالها للمذبح للفوز!
         if (CrystalItem.Instance != null && CrystalItem.Instance.IsCarrier(gameObject))
         {
+            enemyTarget = null;
             currentState = BotState.DeliverCrystal;
+            if (agent != null) agent.stoppingDistance = 0.2f;
             return;
         }
 
-        // 2. فحص قتال الأعداء
-        if (currentState == BotState.Fight)
+        // 2. إذا كانت الكريستالة يحملها لاعب آخر أو بوت آخر
+        if (CrystalItem.Instance != null && CrystalItem.Instance.isCarried.Value)
         {
-            if (!IsEnemyStillValid()) LeaveFight();
-            return;
-        }
+            GameObject carrier = CrystalItem.Instance.GetCarrierObject();
+            Health carrierHealth = carrier != null ? carrier.GetComponent<Health>() : null;
 
-        // 3. الأولوية التكتيكية للكريستالة لكلا الفريقين
-        if (CrystalItem.Instance != null)
-        {
-            if (team == PlayerMovement.TeamType.Protector)
+            if (carrier != null && (carrierHealth == null || !carrierHealth.isDead))
             {
-                if (CrystalItem.Instance.isCarried.Value)
+                if (team == PlayerMovement.TeamType.Protector)
                 {
-                    currentState = BotState.EscortCarrier;
+                    Transform closeEnemy = FindClosestEnemy();
+                    if (closeEnemy != null && Vector3.Distance(transform.position, closeEnemy.position) <= 6f)
+                    {
+                        EnterFight(closeEnemy);
+                    }
+                    else
+                    {
+                        currentState = BotState.EscortCarrier;
+                    }
                     return;
                 }
-                
-                if (CrystalItem.Instance.isDropped.Value)
+                else // Destroyer: نصف المدمرين يطاردون حامل الكريستالة، والنصف الآخر يواصل تحطيم الشجرة!
                 {
-                    SetNewDestination(CrystalItem.Instance.transform.position);
-                    return;
-                }
-            }
-            else // Destroyer
-            {
-                if (CrystalItem.Instance.isCarried.Value)
-                {
-                    GameObject carrier = CrystalItem.Instance.GetCarrierObject();
-                    if (carrier != null)
+                    float distToCarrier = Vector3.Distance(transform.position, carrier.transform.position);
+                    if (distToCarrier <= 11f || (GetInstanceID() & 1) == 0)
                     {
                         EnterFight(carrier.transform);
                         return;
                     }
-                }
-
-                if (CrystalItem.Instance.isDropped.Value)
-                {
-                    currentState = BotState.GuardDroppedCrystal;
-                    return;
+                    else if (allBossesSlain)
+                    {
+                        enemyTarget = null;
+                        currentState = BotState.AttackTree;
+                        return;
+                    }
                 }
             }
         }
 
+        // 3. بعد موت الزعماء الثلاثة أو توفر الكريستالة على الأرض:
+        // حماة الشجرة (Protector Bots) ينطلقون بأنفسهم فوراً لأخذ الكريستالة وإيصالها للمذبح دون انتظار اللاعب!
+        if (CrystalItem.Instance != null && (CrystalItem.Instance.IsAvailableForPickup || (allBossesSlain && !CrystalItem.Instance.isCarried.Value)))
+        {
+            if (!CrystalItem.Instance.IsAvailableForPickup && allBossesSlain)
+            {
+                CrystalItem.Instance.SpawnAtTopServer();
+            }
+
+            if (team == PlayerMovement.TeamType.Protector)
+            {
+                enemyTarget = null;
+                currentState = BotState.FetchCrystal;
+                if (agent != null) agent.stoppingDistance = 0.2f;
+                return;
+            }
+        }
+
+        // 4. للمدمرين (Destroyer Bots): بمجرد موت الزعماء الثلاثة، الأولوية القصوى هي الهجوم المباشر على الشجرة وتدميرها!
+        if (team == PlayerMovement.TeamType.Destroyer && allBossesSlain)
+        {
+            Transform veryCloseEnemy = FindClosestEnemy();
+            // لا ينشغل المدمر بقتال جانبي إلا إذا كان العدو ملاصقاً له تماماً (أقل من 3.5 م)
+            if (veryCloseEnemy != null && Vector3.Distance(transform.position, veryCloseEnemy.position) <= 3.5f)
+            {
+                EnterFight(veryCloseEnemy);
+                return;
+            }
+
+            enemyTarget = null;
+            currentState = BotState.AttackTree;
+            return;
+        }
+
+        // 5. الأولوية التكتيكية قبل موت الزعماء الثلاثة: مهاجمة الزعماء المستيقظين (Bosses 1, 2, 3) لكسر الختم!
+        if (LevelBossManager.Instance != null && !allBossesSlain)
+        {
+            LevelBoss activeBoss = LevelBossManager.Instance.GetActiveAwakenedBoss();
+            if (activeBoss != null)
+            {
+                // إذا كان الزعيم في طابق أعلى، فالأولوية القصوى هي الصعود فوراً إلى طابق الزعيم!
+                bool isBossAboveMe = activeBoss.transform.position.y > (transform.position.y + 3.5f);
+                float threatDist = isBossAboveMe ? 1.8f : 5.5f;
+
+                Transform immediateThreat = FindClosestEnemy();
+                if (immediateThreat != null && Vector3.Distance(transform.position, immediateThreat.position) <= threatDist)
+                {
+                    EnterFight(immediateThreat);
+                    return;
+                }
+
+                EnterFight(activeBoss.transform);
+                return;
+            }
+        }
+
+        // 6. إذا كان مدمراً (Destroyer) ولا يوجد زعيم مستيقظ حالياً (بانتظار نمو الشجرة)، يهاجم الشجرة لإضعافها!
+        if (team == PlayerMovement.TeamType.Destroyer)
+        {
+            Transform closeEnemy = FindClosestEnemy();
+            if (closeEnemy != null && Vector3.Distance(transform.position, closeEnemy.position) <= 6.0f)
+            {
+                EnterFight(closeEnemy);
+                return;
+            }
+
+            enemyTarget = null;
+            currentState = BotState.AttackTree;
+            return;
+        }
+
+        // 7. قتال أي عدو ضمن مدى الرؤية للحماة
         Transform foundEnemy = FindClosestEnemy();
         if (foundEnemy != null)
         {
@@ -297,40 +461,161 @@ public class BotController : NetworkBehaviour
             return;
         }
 
-        if (currentState == BotState.Defend)
+        // 8. إذا كان حامياً (Protector): حراسة المنصات والدفاع عن الشجرة
+        if (team == PlayerMovement.TeamType.Protector)
         {
-            if (Time.time - defendStartTime > 4f)
+            if (currentState == BotState.Defend)
             {
-                currentState = BotState.Advance;
-                hasDestination = false;
-                currentTargetLevel = null;
+                if (Time.time - defendStartTime > 4f)
+                {
+                    currentState = BotState.Advance;
+                    hasDestination = false;
+                    currentTargetLevel = null;
+                }
             }
+            else if (currentState != BotState.Advance)
+            {
+                currentState = BotState.Defend;
+                defendStartTime = Time.time;
+            }
+        }
+    }
+
+    void UpdateAttackTree()
+    {
+        if (treeTarget == null)
+        {
+            FindTree();
+            if (treeTarget == null) return;
+        }
+
+        Vector3 treeCenter = treeTarget.position;
+        Vector3 diff = transform.position - treeCenter;
+        diff.y = 0f;
+        float dist = diff.magnitude;
+
+        CharacterCombat combat = GetComponent<CharacterCombat>();
+        bool isRanged = combat != null && (combat.attackType == CharacterCombat.AttackType.Ranged || combat.attackRange >= 5.5f);
+        float maxAttackDist = isRanged ? Mathf.Max(6.8f, combat.attackRange * 0.85f) : 5.6f;
+
+        // التحرك إلى المحيط المباشر للشجرة (4.15 م) إذا كان البوت بعيداً
+        if (dist > maxAttackDist)
+        {
+            if (agent != null && agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
+                agent.stoppingDistance = 0.3f;
+            }
+            Vector3 dest = FindClosestTreePosition();
+            if (!hasDestination || Vector3.Distance(currentDestination, dest) > 1.2f)
+            {
+                SetNewDestination(dest);
+            }
+        }
+        else
+        {
+            // في مدى ضرب الشجرة: توقف، التفت نحو جذع الشجرة، واضربه بكل قوة!
+            if (agent != null && agent.isOnNavMesh)
+            {
+                agent.isStopped = true;
+            }
+
+            Vector3 lookDir = (treeCenter - transform.position);
+            lookDir.y = 0f;
+            if (lookDir.sqrMagnitude > 0.01f)
+            {
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(lookDir), 12f * Time.deltaTime);
+            }
+
+            if (combat != null)
+            {
+                combat.TryAIAttack(treeTarget);
+            }
+        }
+    }
+
+    void UpdateFetchCrystal()
+    {
+        if (CrystalItem.Instance == null || !CrystalItem.Instance.IsAvailableForPickup)
+        {
+            currentState = BotState.Defend;
+            return;
+        }
+
+        Vector3 crystalPos = CrystalItem.Instance.transform.position;
+
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.stoppingDistance = 0.2f;
+
+            Vector3 targetNavPos = crystalPos;
+            if (NavMesh.SamplePosition(crystalPos, out NavMeshHit navHit, 8f, NavMesh.AllAreas))
+            {
+                targetNavPos = navHit.position;
+            }
+
+            if (!hasDestination || Vector3.Distance(currentDestination, targetNavPos) > 0.6f)
+            {
+                currentDestination = targetNavPos;
+                hasDestination = true;
+                destinationSetTime = Time.time;
+                agent.SetDestination(targetNavPos);
+            }
+        }
+
+        // إذا اقترب البوت الحامي من الكريستالة يلتقطها فوراً
+        Vector3 horizDiff = transform.position - crystalPos;
+        horizDiff.y = 0f;
+        if (horizDiff.magnitude <= CrystalItem.Instance.pickupRadius + 1.2f &&
+            Mathf.Abs(transform.position.y - crystalPos.y) <= 4.5f)
+        {
+            CrystalItem.Instance.TryPickupServer(gameObject);
         }
     }
 
     Transform FindClosestEnemy()
     {
         CharacterCombat[] characters = FindObjectsByType<CharacterCombat>(FindObjectsSortMode.None);
-        Transform closest = null;
-        float closestDistanceSqr = detectionRange * detectionRange;
+        Transform bestTarget = null;
+        float bestScore = detectionRange * detectionRange;
 
         foreach (CharacterCombat character in characters)
         {
             if (character == null || character.gameObject == gameObject) continue;
             if (character.team == team) continue;
 
+            // لا نستهدف زعيماً نائماً لم يُفتح طابقه بعد
+            LevelBoss bossComp = character.GetComponent<LevelBoss>();
+            if (bossComp != null && !bossComp.IsAwakenedAndAlive) continue;
+
             Health health = character.GetComponent<Health>();
             if (health == null || health.isDead) continue;
 
             float sqrDistance = (character.transform.position - transform.position).sqrMagnitude;
-            if (sqrDistance <= closestDistanceSqr)
+            if (sqrDistance > detectionRange * detectionRange) continue;
+
+            // ذكاء تكتيكي: إعطاء أولوية للأعداء ذوي الصحة المنخفضة لحسم القتل، ولحامل الكريستالة!
+            float effectiveScore = sqrDistance;
+            float hpPct = health.maxHealth > 0f ? (health.currentHealth / health.maxHealth) : 1f;
+            if (hpPct < 0.35f)
             {
-                closestDistanceSqr = sqrDistance;
-                closest = character.transform;
+                effectiveScore *= 0.45f; // تركيز الهجوم على العدو الجريح
+            }
+
+            if (CrystalItem.Instance != null && CrystalItem.Instance.IsCarrier(character.gameObject))
+            {
+                effectiveScore *= 0.25f; // أولوية قصوى لحامل الكريستالة
+            }
+
+            if (effectiveScore <= bestScore)
+            {
+                bestScore = effectiveScore;
+                bestTarget = character.transform;
             }
         }
 
-        return closest;
+        return bestTarget;
     }
 
     void EnterFight(Transform target)
@@ -343,11 +628,16 @@ public class BotController : NetworkBehaviour
         hasDestination = false;
         fightStartTime = Time.time;
 
+        CharacterCombat combat = GetComponent<CharacterCombat>();
+        bool isRanged = combat != null && (combat.attackType == CharacterCombat.AttackType.Ranged || combat.attackRange >= 5.5f);
+
         if (agent != null)
-            agent.stoppingDistance = fightStoppingDistance;
+        {
+            agent.stoppingDistance = isRanged ? Mathf.Clamp(combat.attackRange * 0.65f, 4.5f, 8.5f) : fightStoppingDistance;
+        }
     }
 
-    // تم تحديث هذا الجزء لإضافة الهجوم الفعلي
+    // قتال تكتيكي ذكي (Strafing & Kiting للرماة، واندفاع ومراوغة للمحاربين)
     void UpdateFight()
     {
         if (enemyTarget == null)
@@ -356,15 +646,87 @@ public class BotController : NetworkBehaviour
             return;
         }
 
+        Health targetHealth = enemyTarget.GetComponent<Health>();
+        if (targetHealth != null && targetHealth.isDead)
+        {
+            LeaveFight();
+            return;
+        }
+
+        LevelBoss targetBoss = enemyTarget.GetComponent<LevelBoss>();
+        if (targetBoss != null && !targetBoss.IsAwakenedAndAlive)
+        {
+            LeaveFight();
+            return;
+        }
+
         float distance = Vector3.Distance(transform.position, enemyTarget.position);
 
-        if (distance <= fightStoppingDistance)
+        // إذا كان هناك زعيم مستيقظ في طابق علوي والهدف الحالي ليس هو الزعيم، ننسحب من القتال الجانبي لنصعد للزعيم فوراً
+        if (targetBoss == null && LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
         {
-            // وصلنا إلى العدو، نتوقف ونبدأ الهجوم
-            if (agent != null && agent.isOnNavMesh)
-                agent.isStopped = true;
+            LevelBoss awakenedBoss = LevelBossManager.Instance.GetActiveAwakenedBoss();
+            if (awakenedBoss != null && awakenedBoss.transform.position.y > (transform.position.y + 3.0f))
+            {
+                // إذا لم يكن العدو ملاصقاً تماماً (أقل من 2.0م) أو مر على القتال أكثر من ثانيتين، نترك القتال ونصعد للزعيم
+                if (distance > 2.0f || (Time.time - fightStartTime) > 2.0f)
+                {
+                    LeaveFight();
+                    return;
+                }
+            }
+        }
 
-            CharacterCombat combat = GetComponent<CharacterCombat>();
+        CharacterCombat combat = GetComponent<CharacterCombat>();
+        bool isRanged = combat != null && (combat.attackType == CharacterCombat.AttackType.Ranged || combat.attackRange >= 5.5f);
+        float effectiveRange = isRanged ? Mathf.Max(combat.attackRange * 0.85f, 7.5f) : Mathf.Max(fightStoppingDistance, 2.6f);
+
+        if (distance <= effectiveRange)
+        {
+            Vector3 toEnemy = (enemyTarget.position - transform.position);
+            toEnemy.y = 0f;
+            if (toEnemy.sqrMagnitude > 0.01f)
+            {
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toEnemy), 12f * Time.deltaTime);
+            }
+
+            if (agent != null && agent.isOnNavMesh)
+            {
+                // حركة تكتيكية ناعمة تتغير فقط كل 2.0 إلى 2.5 ثانية بدلاً من التذبذب كل فريم (إلغاء مشكلة ارتعاش الصخور تماماً!)
+                if (Time.time >= nextStrafeTime)
+                {
+                    nextStrafeTime = Time.time + Random.Range(1.8f, 2.6f);
+                    currentStrafeSign = (Random.value > 0.5f) ? 1f : -1f;
+
+                    Vector3 rightVec = Vector3.Cross(Vector3.up, toEnemy.normalized);
+                    if (isRanged && distance < 4.0f)
+                    {
+                        Vector3 kitePos = transform.position - toEnemy.normalized * 2.5f + rightVec * (currentStrafeSign * 1.5f);
+                        if (NavMesh.SamplePosition(kitePos, out NavMeshHit kiteHit, 3f, NavMesh.AllAreas))
+                        {
+                            agent.isStopped = false;
+                            agent.stoppingDistance = 0.2f;
+                            agent.SetDestination(kiteHit.position);
+                        }
+                    }
+                    else if (isRanged || distance > 2.2f)
+                    {
+                        Vector3 strafePos = transform.position + rightVec * (currentStrafeSign * (isRanged ? 2.0f : 1.2f));
+                        if (NavMesh.SamplePosition(strafePos, out NavMeshHit strafeHit, 2.5f, NavMesh.AllAreas))
+                        {
+                            agent.isStopped = false;
+                            agent.stoppingDistance = 0.2f;
+                            agent.SetDestination(strafeHit.position);
+                        }
+                    }
+                    else
+                    {
+                        // المقاتل القريب يثبت أقدامه ويهاجم بحزم دون أي ارتعاش
+                        agent.isStopped = true;
+                    }
+                }
+            }
+
             if (combat != null)
             {
                 combat.TryAIAttack(enemyTarget);
@@ -372,11 +734,16 @@ public class BotController : NetworkBehaviour
         }
         else
         {
-            // ما زلنا نطارد العدو
+            // مطاردة الهدف أو الصعود إلى طابق الزعيم بسلاسة ودون تكرار الاستعلام في كل إطار
             if (agent != null && agent.isOnNavMesh)
             {
-                agent.isStopped = false;
-                agent.SetDestination(enemyTarget.position);
+                if (Time.time >= nextRepathTime || agent.isStopped)
+                {
+                    nextRepathTime = Time.time + 0.35f;
+                    agent.isStopped = false;
+                    agent.stoppingDistance = isRanged ? 5.0f : fightStoppingDistance;
+                    agent.SetDestination(enemyTarget.position);
+                }
             }
         }
     }
@@ -549,7 +916,7 @@ public class BotController : NetworkBehaviour
 
         direction.Normalize();
 
-        Vector3 desired = treeTarget.position + direction * 5f;
+        Vector3 desired = new Vector3(treeTarget.position.x, transform.position.y, treeTarget.position.z) + direction * 4.15f;
 
         NavMeshHit hit;
         if (NavMesh.SamplePosition(desired, out hit, 5f, NavMesh.AllAreas))
@@ -564,14 +931,26 @@ public class BotController : NetworkBehaviour
 
     void UpdateDeliverCrystal()
     {
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.stoppingDistance = 0.2f;
+        }
+
         CrystalAltar altar = FindClosestAltar();
         if (altar != null)
         {
-            SetNewDestination(altar.transform.position);
+            Vector3 altarPos = altar.transform.position;
+            if (NavMesh.SamplePosition(altarPos, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
+            {
+                altarPos = navHit.position;
+            }
+            SetNewDestination(altarPos);
+            if (agent != null) agent.stoppingDistance = 0.2f;
         }
         else if (treeTarget != null)
         {
-            SetNewDestination(treeTarget.position);
+            SetNewDestination(FindClosestTreePosition());
         }
 
         if (CrystalItem.Instance != null)
@@ -655,5 +1034,31 @@ public class BotController : NetworkBehaviour
         }
 
         return closest;
+    }
+
+    void EnforceTreeTrunkAvoidance()
+    {
+        if (treeTarget == null) return;
+
+        Vector3 diff = transform.position - treeTarget.position;
+        diff.y = 0f;
+        float dist = diff.magnitude;
+        float minTrunkDist = 3.85f; // نصف قطر جذع الشجرة في العالم 3.0م + هامش أمان للبوت
+
+        if (dist < minTrunkDist)
+        {
+            Vector3 pushDir = dist > 0.05f ? diff.normalized : Vector3.forward;
+            Vector3 safePos = treeTarget.position + pushDir * minTrunkDist;
+            safePos.y = transform.position.y;
+
+            if (agent != null && agent.isOnNavMesh)
+            {
+                agent.Warp(safePos);
+            }
+            else
+            {
+                transform.position = safePos;
+            }
+        }
     }
 }

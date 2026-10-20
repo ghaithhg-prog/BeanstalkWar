@@ -3,24 +3,36 @@ using UnityEngine.UI;
 
 public class TreeGrowth : MonoBehaviour
 {
+    public static TreeGrowth Instance { get; private set; }
+
     [Header("UI")]
     public Image healthBarFill;
 
-    [Header("Growth")]
-    public float growthSpeed = 0.5f;
-    public float maxHeight = 18f;
+    [Header("Growth Stages")]
+    public float stage1Duration = 18.0f; // Level 1 -> Level 2 (~18s)
+    public float stage2Duration = 18.0f; // Level 2 -> Level 3 (~18s)
+    public float stage3Duration = 18.0f; // Level 3 -> TopLevel (~18s)
+    public float level1Height = 5.80f;
+    public float level2Height = 15.70f;
+    public float level3Height = 25.70f;
+    public float topLevelHeight = 40.0f;
+    public float maxHeight = 40.0f;
+
+    public float ElapsedGrowthTime { get; private set; } = 0f;
+    public float CurrentHeight { get; private set; } = 5.80f;
+
 
     [Header("Shake Settings")]
     public float shakeDuration = 2f;
     public float shakeAmount = 0.1f;
 
     [Header("Health")]
-    public float maxHealth = 800f;
+    public float maxHealth = 7200f;
     public float currentHealth;
 
     [Header("Critical State")]
     public float criticalDuration = 4f;
-    public float rescueHealThreshold = 120f;
+    public float rescueHealThreshold = 1000f;
 
     [Header("Fall Settings")]
     public float fallSpeed = 120f;
@@ -35,20 +47,62 @@ public class TreeGrowth : MonoBehaviour
     private float shakeTimer = 0f;
     private float criticalTimer = 0f;
     private float healDuringCritical = 0f;
-    private float currentFallAngle = 0f;
 
     private Vector3 originalPivotPosition;
 
+    void Awake()
+    {
+        Instance = this;
+        // إجبار القيم دائماً لتجاوز أي قيمة قديمة محفوظة في المشهد
+        maxHealth = 7200f;
+        rescueHealThreshold = 1000f;
+        currentHealth = maxHealth;
+
+        level1Height = 5.80f;
+        level2Height = 15.70f;
+        level3Height = 25.70f;
+        topLevelHeight = 40.0f;
+        maxHeight = 40.0f;
+
+        // إضافة NavMeshObstacle لحفر مسار حول جذع الشجرة ومنع أي بوت من الدخول فيه نهائياً
+        UnityEngine.AI.NavMeshObstacle obstacle = GetComponent<UnityEngine.AI.NavMeshObstacle>();
+        if (obstacle == null)
+        {
+            obstacle = gameObject.AddComponent<UnityEngine.AI.NavMeshObstacle>();
+        }
+        obstacle.carving = true;
+        obstacle.shape = UnityEngine.AI.NavMeshObstacleShape.Capsule;
+        obstacle.radius = 0.65f;
+        obstacle.height = 5.0f;
+    }
+
     void Start()
     {
-        if (maxHealth < 200f)
-        {
-            maxHealth = 800f;
-            rescueHealThreshold = 120f;
-        }
-
+        maxHealth = 7200f;
+        rescueHealThreshold = 1000f;
         currentHealth = maxHealth;
+
+        level1Height = 5.80f;
+        level2Height = 15.70f;
+        level3Height = 25.70f;
+        topLevelHeight = 40.0f;
+        maxHeight = 40.0f;
+
+        // ضمان بدء الشجرة صغيرة عند المستوى الأول (y = 5.80m) كما طلب غيث تماماً
+        ElapsedGrowthTime = 0f;
+        CurrentHeight = level1Height;
+        MeshRenderer treeMr = GetComponent<MeshRenderer>();
+        if (treeMr != null) treeMr.enabled = false;
+        transform.localScale = new Vector3(6f, level1Height * 0.5f, 6f);
+        transform.localPosition = new Vector3(0f, level1Height * 0.5f, 0f);
+        isMature = false;
+
         FormatHealthBarUI();
+
+        MajesticTrunkGrowth.Instance?.UpdateGrowth(level1Height);
+
+        ReparentTreeComponentsToPivot();
+        Invoke(nameof(ReparentTreeComponentsToPivot), 0.6f);
     }
 
     void FormatHealthBarUI()
@@ -60,16 +114,44 @@ public class TreeGrowth : MonoBehaviour
 
             if (parentRect != null)
             {
-                // جعل شريط الصحة ممتداً بعرض الشاشة كشريط عريض بالأعلى
-                parentRect.anchorMin = new Vector2(0.08f, 1f);
-                parentRect.anchorMax = new Vector2(0.92f, 1f);
+                // إزالة المربع أو الخط الأبيض المشوه الموجود خلف شريط الصحة نهائياً
+                Transform grandParent = parentRect.parent;
+                if (grandParent != null)
+                {
+                    Image whiteImg = grandParent.GetComponent<Image>();
+                    if (whiteImg != null)
+                    {
+                        whiteImg.enabled = false;
+                        whiteImg.color = Color.clear;
+                    }
+
+                    RectTransform grandRect = grandParent as RectTransform;
+                    if (grandRect != null)
+                    {
+                        grandRect.anchorMin = new Vector2(0.15f, 1f);
+                        grandRect.anchorMax = new Vector2(0.85f, 1f);
+                        grandRect.pivot = new Vector2(0.5f, 1f);
+                        grandRect.anchoredPosition = new Vector2(0f, -10f);
+                        grandRect.sizeDelta = new Vector2(0f, 40f);
+                    }
+                }
+
+                // إعطاء خلفية الشريط تصميماً خشبياً داكناً بارتفاع ممتاز 38 وعرض متناسق
+                Image parentImg = parentRect.GetComponent<Image>();
+                if (parentImg != null)
+                {
+                    parentImg.color = new Color(0.12f, 0.16f, 0.12f, 0.94f); // خشب غابي داكن مزخرف
+                }
+
+                parentRect.anchorMin = new Vector2(0.15f, 1f);
+                parentRect.anchorMax = new Vector2(0.85f, 1f);
                 parentRect.pivot = new Vector2(0.5f, 1f);
-                parentRect.anchoredPosition = new Vector2(0f, -12f);
-                parentRect.sizeDelta = new Vector2(0f, 32f);
+                parentRect.anchoredPosition = new Vector2(0f, -10f);
+                parentRect.sizeDelta = new Vector2(0f, 38f);
             }
 
-            fillRect.anchorMin = new Vector2(0f, 0f);
-            fillRect.anchorMax = new Vector2(1f, 1f);
+            fillRect.anchorMin = new Vector2(0.003f, 0.08f);
+            fillRect.anchorMax = new Vector2(0.997f, 0.92f);
             fillRect.sizeDelta = Vector2.zero;
             fillRect.anchoredPosition = Vector2.zero;
         }
@@ -103,9 +185,15 @@ public class TreeGrowth : MonoBehaviour
     {
         UpdateHealthBar();
 
+        bool isMatchPlaying = GameStateManager.Instance == null ||
+                              GameStateManager.Instance.currentState == GameStateManager.GameState.Playing;
+
         if (!isDead)
         {
-            GrowTree();
+            if (isMatchPlaying)
+            {
+                GrowTree();
+            }
             CheckDeath();
         }
 
@@ -133,23 +221,73 @@ public class TreeGrowth : MonoBehaviour
     {
         if (!isMature)
         {
-            float growth = growthSpeed * Time.deltaTime;
+            ElapsedGrowthTime += Time.deltaTime;
 
-            transform.localScale += new Vector3(0, growth, 0);
-            transform.position += new Vector3(0, growth / 2f, 0);
-
-            if (transform.localScale.y >= maxHeight)
+            float targetHeight;
+            if (ElapsedGrowthTime <= stage1Duration)
             {
-                transform.localScale = new Vector3(
-                    transform.localScale.x,
-                    maxHeight,
-                    transform.localScale.z
-                );
-
-                isMature = true;
-                StartShake(); // ✅ اهتزاز عند النضج
+                float t = Mathf.Clamp01(ElapsedGrowthTime / stage1Duration);
+                targetHeight = Mathf.Lerp(level1Height, level2Height, t);
             }
+            else if (ElapsedGrowthTime <= stage1Duration + stage2Duration)
+            {
+                float t = Mathf.Clamp01((ElapsedGrowthTime - stage1Duration) / stage2Duration);
+                targetHeight = Mathf.Lerp(level2Height, level3Height, t);
+            }
+            else if (ElapsedGrowthTime <= stage1Duration + stage2Duration + stage3Duration)
+            {
+                float t = Mathf.Clamp01((ElapsedGrowthTime - stage1Duration - stage2Duration) / stage3Duration);
+                targetHeight = Mathf.Lerp(level3Height, topLevelHeight, t);
+            }
+            else
+            {
+                targetHeight = topLevelHeight;
+                isMature = true;
+                StartShake(); // اهتزاز عند بلوغ القمة ونضج الشجرة
+            }
+
+            CurrentHeight = targetHeight;
+            MeshRenderer treeMr = GetComponent<MeshRenderer>();
+            if (treeMr != null && treeMr.enabled) treeMr.enabled = false;
+
+            transform.localScale = new Vector3(6f, targetHeight * 0.5f, 6f);
+            transform.localPosition = new Vector3(0f, targetHeight * 0.5f, 0f);
+
+            MajesticTrunkGrowth.Instance?.UpdateGrowth(targetHeight);
         }
+    }
+
+    /// <summary>
+    /// يطلق نمواً انفجارياً هائلاً للشجرة عند تسليم الكريستالة بنجاح احتفالاً بنصر حماة الغابة!
+    /// </summary>
+    public void TriggerCelebratoryExplosiveGrowth(float boostHeight = 16f)
+    {
+        StartCoroutine(CelebratoryGrowthRoutine(boostHeight));
+    }
+
+    System.Collections.IEnumerator CelebratoryGrowthRoutine(float boostHeight)
+    {
+        float targetHeight = transform.localScale.y + boostHeight;
+        float elapsed = 0f;
+        float duration = 3.5f;
+        Vector3 origScale = transform.localScale;
+        StartShake();
+
+        while (elapsed < duration)
+        {
+            float t = elapsed / duration;
+            float smooth = Mathf.SmoothStep(0f, 1f, t);
+            float newY = Mathf.Lerp(origScale.y, targetHeight, smooth);
+            float diff = newY - transform.localScale.y;
+
+            transform.localScale = new Vector3(transform.localScale.x, newY, transform.localScale.z);
+            transform.position += new Vector3(0, diff / 2f, 0);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        isMature = true;
     }
 
     // =========================
@@ -157,33 +295,40 @@ public class TreeGrowth : MonoBehaviour
     // =========================
 
     void CheckDeath()
-{
-    if (currentHealth <= 0 && !isDead)
     {
-        // ✅ إذا كنا داخل الحالة الحرجة لا نفعل شيئًا
-        if (isCritical)
-            return;
+        // درع الزعماء الثلاثة: لا يمكن إماتة الشجرة أو دخول الحالة الحرجة إلا بعد هزيمة الزعماء الثلاثة
+        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+        if (shieldActive) return;
 
-        if (!criticalUsed)
+        if (currentHealth <= 0 && !isDead)
         {
-            EnterCriticalState();
-        }
-        else
-        {
-            FinalDeath();
+            // إذا كنا داخل الحالة الحرجة لا نفعل شيئًا
+            if (isCritical)
+                return;
+
+            if (!criticalUsed)
+            {
+                EnterCriticalState();
+            }
+            else
+            {
+                FinalDeath();
+            }
         }
     }
-}
 
     void EnterCriticalState()
     {
+        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+        if (shieldActive) return;
+
         isCritical = true;
         criticalUsed = true;
         criticalTimer = criticalDuration;
         healDuringCritical = 0f;
         currentHealth = 0f;
 
-        StartShake(); // ✅ اهتزاز أثناء الحالة الحرجة
+        StartShake(); // اهتزاز أثناء الحالة الحرجة
 
         Debug.Log("Tree entered Critical State!");
     }
@@ -242,34 +387,295 @@ public class TreeGrowth : MonoBehaviour
 
             if (isMature && !isCritical)
             {
-                Debug.Log("Tree reached Top Level. Crystal Ready!");
+                bool allBossesSlain = LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated;
+                if (allBossesSlain)
+                {
+                    Debug.Log("Tree reached Top Level & All 3 Bosses Slain! Crystal Ready!");
+                    OnTreeReachedTopLevel?.Invoke();
+                }
+                else
+                {
+                    Debug.Log("Tree reached Top Level, awaiting defeat of all 3 Bosses to unseal Crystal!");
+                }
+            }
+        }
+    }
+
+    public void ApplyBossKillGrowthBoost(float extraHeight)
+    {
+        if (isDead || isMature) return;
+        float newY = Mathf.Min(maxHeight, transform.localScale.y + extraHeight);
+        float diff = newY - transform.localScale.y;
+        if (diff > 0.01f)
+        {
+            transform.localScale = new Vector3(transform.localScale.x, newY, transform.localScale.z);
+            transform.position += new Vector3(0f, diff / 2f, 0f);
+        }
+        if (newY >= maxHeight)
+        {
+            isMature = true;
+            if (LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated)
+            {
                 OnTreeReachedTopLevel?.Invoke();
             }
         }
     }
 
     // =========================
-    // Fall
+    // Fall & Cinematic Collapse
     // =========================
+
+    private bool isCollapsingBannerActive = false;
+
+    public void ReparentTreeComponentsToPivot()
+    {
+        Transform pivot = transform.parent; // TreePivot
+        if (pivot == null) return;
+
+        GameObject trunk = GameObject.Find("MajesticBraidedBeanstalkTrunk");
+        if (trunk != null && trunk.transform.parent != pivot)
+        {
+            trunk.transform.SetParent(pivot, true);
+        }
+
+        GameObject canopies = GameObject.Find("TreeCanopyLevelDecorations");
+        if (canopies != null && canopies.transform.parent != pivot)
+        {
+            canopies.transform.SetParent(pivot, true);
+        }
+    }
 
     void FinalDeath()
     {
+        // حماية قاطعة: لا تسقط الشجرة أبداً إلا بعد موت الزعماء الثلاثة
+        if (LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
+        {
+            currentHealth = maxHealth * 0.30f;
+            isCritical = false;
+            return;
+        }
+
+        if (isDead) return;
         isDead = true;
         isFalling = true;
 
-        Debug.Log("Tree permanently destroyed!");
-        GameStateManager.Instance.EndGame("Destroyers");
+        Debug.Log("🌲💥 Tree permanently destroyed! Initiating cinematic collapse sequence...");
+        StartCoroutine(CinematicTreeCollapseRoutine());
     }
 
     void HandleFall()
     {
-        float fallStep = fallSpeed * Time.deltaTime;
+        // يتم التحكم بالسقوط سينمائياً وبدقة عبر CinematicTreeCollapseRoutine
+    }
 
-        if (currentFallAngle < 90f)
+    System.Collections.IEnumerator CinematicTreeCollapseRoutine()
+    {
+        isCollapsingBannerActive = true;
+
+        // 1. ضمان التحام وتوحيد كافة أجزاء الشجرة تحت TreePivot
+        ReparentTreeComponentsToPivot();
+
+        Transform pivot = transform.parent;
+        if (pivot == null)
         {
-            transform.parent.Rotate(Vector3.forward, fallStep);
-            currentFallAngle += fallStep;
+            isCollapsingBannerActive = false;
+            GameStateManager.Instance?.EndGame("Destroyers");
+            yield break;
         }
+
+        // المرحلة الأولى: هزة عنيفة وتشقق الجذع واهتزاز الشاشة وصوت التصدع (1.2 ثانية)
+        ThirdPersonCamera.Shake(1.4f, 0.45f);
+        SpawnCollapseDebris(transform.position + Vector3.up * 2.5f, 16);
+
+        float groanTime = 1.2f;
+        float elapsedGroan = 0f;
+        Quaternion startRot = pivot.rotation;
+        Vector3 fallAxis = new Vector3(0.35f, 0f, 1f).normalized;
+
+        while (elapsedGroan < groanTime)
+        {
+            elapsedGroan += Time.deltaTime;
+            float groanAngle = Mathf.Lerp(0f, 4f, elapsedGroan / groanTime);
+            pivot.rotation = startRot * Quaternion.AngleAxis(groanAngle, fallAxis);
+            yield return null;
+        }
+
+        // المرحلة الثانية: سقوط جاذبي سينمائي متسارع مهيب (2.6 ثانية)
+        float fallDuration = 2.6f;
+        float elapsedFall = 0f;
+        ThirdPersonCamera.Shake(fallDuration + 1f, 0.35f);
+
+        while (elapsedFall < fallDuration)
+        {
+            elapsedFall += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsedFall / fallDuration);
+            float curve = Mathf.Pow(t, 2.3f);
+            float angle = Mathf.Lerp(4f, 90f, curve);
+
+            pivot.rotation = startRot * Quaternion.AngleAxis(angle, fallAxis);
+
+            if (Random.value < 0.35f)
+            {
+                Vector3 midPoint = pivot.position + Vector3.up * 18f;
+                SpawnFallLeavesDust(midPoint, 3);
+            }
+
+            yield return null;
+        }
+
+        pivot.rotation = startRot * Quaternion.AngleAxis(90f, fallAxis);
+
+        // المرحلة الثالثة: الارتطام الكارثي بالأرض!
+        ThirdPersonCamera.Shake(1.8f, 0.85f);
+        SpawnGroundImpactShockwave(pivot.position, 90f);
+        SpawnCollapseDebris(pivot.position + fallAxis * 20f, 25);
+
+        // وقفة سينمائية قصيرة لمشاهدة ركام الشجرة الهائلة
+        yield return new WaitForSeconds(0.9f);
+
+        isCollapsingBannerActive = false;
+
+        // المرحلة الرابعة: إنهاء المعركة وإعلان فوز المدمرين باللغة المختارة وظهور شاشة النقاط
+        if (GameStateManager.Instance != null)
+        {
+            GameStateManager.Instance.EndGame("Destroyers");
+        }
+        else
+        {
+            MatchEndStatsUI.Instance?.ShowVictoryScreen("Destroyers");
+        }
+    }
+
+    void SpawnGroundImpactShockwave(Vector3 center, float treeHeight)
+    {
+        StartCoroutine(ShockwaveRingRoutine(center));
+    }
+
+    System.Collections.IEnumerator ShockwaveRingRoutine(Vector3 center)
+    {
+        GameObject shockObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        shockObj.name = "TreeImpactShockwave";
+        Collider c = shockObj.GetComponent<Collider>();
+        if (c != null) Destroy(c);
+
+        Renderer rend = shockObj.GetComponent<Renderer>();
+        Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material shockMat = new Material(s);
+        shockMat.color = new Color(0.85f, 0.75f, 0.55f, 0.65f);
+        if (shockMat.HasProperty("_EmissionColor"))
+        {
+            shockMat.EnableKeyword("_EMISSION");
+            shockMat.SetColor("_EmissionColor", new Color(0.9f, 0.8f, 0.5f) * 0.6f);
+        }
+        rend.material = shockMat;
+
+        float duration = 1.4f;
+        float elapsed = 0f;
+        shockObj.transform.position = new Vector3(center.x, 0.2f, center.z);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            float radius = Mathf.Lerp(4f, 32f, Mathf.Sqrt(t));
+            shockObj.transform.localScale = new Vector3(radius * 2f, 0.15f, radius * 2f);
+
+            Color col = shockMat.color;
+            col.a = Mathf.Lerp(0.7f, 0f, t);
+            shockMat.color = col;
+            yield return null;
+        }
+
+        Destroy(shockObj);
+    }
+
+    void SpawnCollapseDebris(Vector3 origin, int count)
+    {
+        Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material debMat = new Material(s);
+        debMat.color = new Color(0.42f, 0.28f, 0.14f);
+
+        for (int i = 0; i < count; i++)
+        {
+            GameObject chip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            chip.name = "TreeDebrisChunk";
+            Collider c = chip.GetComponent<Collider>();
+            if (c != null) Destroy(c);
+
+            chip.GetComponent<Renderer>().material = debMat;
+            chip.transform.position = origin + Random.insideUnitSphere * 2.5f;
+            chip.transform.localScale = new Vector3(Random.Range(0.4f, 1.2f), Random.Range(0.4f, 1.2f), Random.Range(0.4f, 1.2f));
+
+            Rigidbody rb = chip.AddComponent<Rigidbody>();
+            rb.mass = 1.5f;
+            Vector3 forceDir = (Random.onUnitSphere + Vector3.up * 1.2f).normalized;
+            rb.AddForce(forceDir * Random.Range(6f, 16f), ForceMode.Impulse);
+            rb.AddTorque(Random.insideUnitSphere * 12f, ForceMode.Impulse);
+
+            Destroy(chip, Random.Range(4f, 7f));
+        }
+    }
+
+    void SpawnFallLeavesDust(Vector3 origin, int count)
+    {
+        Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material leafMat = new Material(s);
+        leafMat.color = new Color(0.25f, 0.75f, 0.35f, 0.8f);
+
+        for (int i = 0; i < count; i++)
+        {
+            GameObject leaf = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            leaf.name = "TreeFallingLeaf";
+            Collider c = leaf.GetComponent<Collider>();
+            if (c != null) Destroy(c);
+
+            leaf.GetComponent<Renderer>().material = leafMat;
+            leaf.transform.position = origin + Random.insideUnitSphere * 6f;
+            leaf.transform.localScale = Vector3.one * Random.Range(0.6f, 1.4f);
+
+            Rigidbody rb = leaf.AddComponent<Rigidbody>();
+            rb.mass = 0.1f;
+            rb.linearDamping = 1.5f;
+            rb.AddForce(Vector3.down * Random.Range(2f, 5f) + Random.insideUnitSphere * 2f, ForceMode.Impulse);
+
+            Destroy(leaf, Random.Range(3f, 5f));
+        }
+    }
+
+    void OnGUI()
+    {
+        if (!isCollapsingBannerActive) return;
+
+        float bannerW = Mathf.Min(Screen.width * 0.88f, 700f);
+        float bannerH = 60f;
+        float bx = (Screen.width - bannerW) / 2f;
+        float by = 60f;
+
+        Rect bannerRect = new Rect(bx, by, bannerW, bannerH);
+        EnchantedNatureGUI.DrawWoodPlate(bannerRect, new Color(0.35f, 0.08f, 0.05f, 0.95f), new Color(1f, 0.45f, 0.15f, 0.95f));
+
+        GUIStyle style = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 18,
+            fontStyle = FontStyle.Bold
+        };
+        style.normal.textColor = new Color(1f, 0.88f, 0.2f);
+
+        string collapseText = LanguageSelectionUI.Localize(
+            "🔥 THE SACRED TREE IS COLLAPSING! 🔥",
+            "🔥 الشجرة المقدسة تنهار وتسقط الآن! 🔥",
+            "🔥 СВЯЩЕННОЕ ДЕРЕВО ПАДАЕТ! 🔥",
+            "🔥 ¡EL ÁRBOL SAGRADO SE DERRUMBA! 🔥",
+            "🔥 L'ARBRE SACRÉ S'EFFONDRE ! 🔥",
+            "🔥 DER HEILIGE BAUM STÜRZT EIN! 🔥",
+            "🔥 पवित्र वृक्ष गिर रहा है! 🔥",
+            "🔥 神圣巨树正在倾覆倒塌！🔥",
+            "🔥 聖なる巨木が倒壊している！🔥",
+            "🔥 A ÁRVORE SAGRADA ESTÁ DESABANDO! 🔥"
+        );
+
+        GUI.Label(bannerRect, collapseText, style);
     }
 
     // =========================
@@ -278,10 +684,25 @@ public class TreeGrowth : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
+        TakeDamage(amount, null);
+    }
+
+    public void TakeDamage(float amount, GameObject attacker)
+    {
         if (isDead) return;
 
+        if (attacker != null)
+        {
+            MatchEndStatsUI.Instance?.RegisterDamage(attacker, amount);
+        }
+
         currentHealth -= amount;
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+        // درع الأختام الثلاثة: لا يمكن إسقاط الشجرة أو إنزال صحتها تحت 30% إلا بعد هزيمة الزعماء الثلاثة جميعاً!
+        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+        float minAllowedHealth = shieldActive ? (maxHealth * 0.30f) : 0f;
+
+        currentHealth = Mathf.Clamp(currentHealth, minAllowedHealth, maxHealth);
     }
 
     public void Heal(float amount)
@@ -310,7 +731,16 @@ public class TreeGrowth : MonoBehaviour
         {
             float healthPercent = currentHealth / maxHealth;
             healthBarFill.fillAmount = healthPercent;
-            healthBarFill.color = Color.Lerp(Color.red, Color.green, healthPercent);
+            bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+            if (shieldActive && healthPercent <= 0.31f)
+            {
+                // لون ذهبي متوهج يدل على أن درع الزعماء الثلاثة يحمي الشجرة من السقوط (صامدة عند 30%)
+                healthBarFill.color = new Color(1f, 0.82f, 0.2f);
+            }
+            else
+            {
+                healthBarFill.color = Color.Lerp(Color.red, Color.green, healthPercent);
+            }
         }
     }
 }

@@ -86,15 +86,15 @@ public static class CrystalSetupTool
             if (tree != null) center = tree.transform.position;
             center.y = 0f;
 
-            // 3 زوايا حول القاعدة (مسافة 15 متراً من المركز)
-            float radius = 15f;
-            string[] names = { "Altar_East (شرق)", "Altar_SouthWest (جنوب غرب)", "Altar_NorthWest (شمال غرب)" };
-            float[] angles = { 0f, 120f, 240f };
+            // 4 زوايا حول القاعدة في الساحة المفتوحة (مسافة 27 متراً خارج قطر المستوى الأول)
+            float radius = 27f;
+            string[] names = { "Altar_North (شمال)", "Altar_East (شرق)", "Altar_South (جنوب)", "Altar_West (غرب)" };
+            float[] angles = { 0f, 90f, 180f, 270f };
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 float rad = angles[i] * Mathf.Deg2Rad;
-                Vector3 pos = center + new Vector3(Mathf.Cos(rad), 0.1f, Mathf.Sin(rad)) * radius;
+                Vector3 pos = center + new Vector3(Mathf.Sin(rad), 0.05f, Mathf.Cos(rad)) * radius;
 
                 GameObject altar = new GameObject(names[i]);
                 altar.transform.position = pos;

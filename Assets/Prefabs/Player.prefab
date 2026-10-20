@@ -50,6 +50,7 @@ GameObject:
   - component: {fileID: 3624998846404481050}
   - component: {fileID: 6119713561338104708}
   - component: {fileID: 9204017863487889461}
+  - component: {fileID: 3795988728112459481}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -192,7 +193,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 292685119
+  GlobalObjectIdHash: 3277595983
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -241,6 +242,12 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: -1
+  isCarryingCrystal:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  crystalSpeedMultiplier: 0.82
   walkSpeed: 6
   runSpeed: 10
   climbSpeedMultiplier: 1.4
@@ -260,9 +267,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Health
   respawnText: {fileID: 0}
-  maxHealth: 100
+  maxHealth: 200
   currentHealth: 0
   isDead: 0
+  lastAttacker: {fileID: 0}
 --- !u!114 &3624998846404481050
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -342,3 +350,48 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!114 &3795988728112459481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5180233016733379006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 650041c32fc35e34ab6dcb0b4611b770, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerXP
+  ShowTopMostFoldoutHeaderGroup: 1
+  maxLevel: 10
+  xpPerLevel: 0000000064000000dc0000006801000008020000bc02000084030000600400005005000054060000
+  xpPerKill: 80
+  xpPerAssist: 30
+  xpPerTreeHit: 5
+  damageMultiplierPerLevel: 0.12
+  healthMultiplierPerLevel: 0.08
+  speedMultiplierPerLevel: 0.03
+  ultimateDamage: 150
+  ultimateRadius: 6
+  ultimateCooldown: 45
+  canSummon: 0
+  currentLevel:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 1
+  currentXP:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  killCount:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  ultimateReady:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0

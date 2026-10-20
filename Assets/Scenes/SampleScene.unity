@@ -137,7 +137,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &85643955
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -271,7 +271,7 @@ MonoBehaviour:
   - 0
   - 15
   - 25
-  - 28
+  - 35.7
   spiralConnector: {fileID: 838068927}
 --- !u!4 &131014318
 Transform:
@@ -1275,7 +1275,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &871609922
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -1757,13 +1757,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TreeGrowth
   healthBarFill: {fileID: 316337431}
   growthSpeed: 0.5
-  maxHeight: 28
+  maxHeight: 35.7
   shakeDuration: 2
   shakeAmount: 0.1
-  maxHealth: 200
-  currentHealth: 100
+  maxHealth: 2400
+  currentHealth: 2400
   criticalDuration: 4
-  rescueHealThreshold: 30
+  rescueHealThreshold: 350
   fallSpeed: 120
 --- !u!136 &1186601244
 CapsuleCollider:
@@ -2618,7 +2618,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &1514327301
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -2933,7 +2933,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 5, y: 1, z: 5}
+  m_LocalScale: {x: 65, y: 1, z: 65}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
