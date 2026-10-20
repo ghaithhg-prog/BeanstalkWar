@@ -19,6 +19,19 @@ public class MedievalCrosshairHUD : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     public static void InitializeCrosshair()
     {
+        Image[] allImages = FindObjectsByType<Image>(FindObjectsInactive.Include);
+        foreach (var img in allImages)
+        {
+            if (img != null && img.gameObject.name == "Crosshair")
+            {
+                if (img.GetComponent<MedievalCrosshairHUD>() == null)
+                {
+                    img.gameObject.AddComponent<MedievalCrosshairHUD>();
+                }
+                return;
+            }
+        }
+
         GameObject crosshairObj = GameObject.Find("Crosshair");
         if (crosshairObj != null && crosshairObj.GetComponent<MedievalCrosshairHUD>() == null)
         {

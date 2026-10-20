@@ -416,18 +416,19 @@ public class BotController : NetworkBehaviour
             return;
         }
 
-        // 5. الأولوية التكتيكية قبل موت الزعماء الثلاثة: مهاجمة الزعماء المستيقظين (Bosses 1, 2, 3) لكسر الختم!
-        if (LevelBossManager.Instance != null && !allBossesSlain)
+        // 5. للمدمرين (Destroyer Bots) قبل موت الزعماء الثلاثة: صعود المنصات ومهاجمة الزعيم المستيقظ لكسر الختم!
+        if (team == PlayerMovement.TeamType.Destroyer && LevelBossManager.Instance != null && !allBossesSlain)
         {
             LevelBoss activeBoss = LevelBossManager.Instance.GetActiveAwakenedBoss();
             if (activeBoss != null)
             {
-                // إذا كان الزعيم في طابق أعلى، فالأولوية القصوى هي الصعود فوراً إلى طابق الزعيم!
-                bool isBossAboveMe = activeBoss.transform.position.y > (transform.position.y + 3.5f);
-                float threatDist = isBossAboveMe ? 1.8f : 5.5f;
-
+                // إذا كان هناك عدو (حامي) ملتصق بنا على نفس الطابق ويهددنا مباشرة
                 Transform immediateThreat = FindClosestEnemy();
-                if (immediateThreat != null && Vector3.Distance(transform.position, immediateThreat.position) <= threatDist)
+                CharacterCombat myCombat = GetComponent<CharacterCombat>();
+                bool isRanged = myCombat != null && (myCombat.attackType == CharacterCombat.AttackType.Ranged || myCombat.attackRange >= 5.5f);
+                float threatDist = isRanged ? 4.0f : 2.5f;
+                if (immediateThreat != null && Vector3.Distance(transform.position, immediateThreat.position) <= threatDist &&
+                    Mathf.Abs(immediateThreat.position.y - transform.position.y) <= 2.5f)
                 {
                     EnterFight(immediateThreat);
                     return;
@@ -438,13 +439,29 @@ public class BotController : NetworkBehaviour
             }
         }
 
-        // 6. إذا كان مدمراً (Destroyer) ولا يوجد زعيم مستيقظ حالياً (بانتظار نمو الشجرة)، يهاجم الشجرة لإضعافها!
+        // 6. إذا كان مدمراً (Destroyer) ولا يوجد زعيم مستيقظ حالياً: الصعود نحو الطابق النشط ومقاتلة الأعداء
         if (team == PlayerMovement.TeamType.Destroyer)
         {
             Transform closeEnemy = FindClosestEnemy();
-            if (closeEnemy != null && Vector3.Distance(transform.position, closeEnemy.position) <= 6.0f)
+            if (closeEnemy != null)
             {
-                EnterFight(closeEnemy);
+                float vertDist = Mathf.Abs(closeEnemy.position.y - transform.position.y);
+                float dist = Vector3.Distance(transform.position, closeEnemy.position);
+                // قتال العدو فقط إذا كان على نفس الطابق أو في نطاق متقارب
+                if (vertDist <= 2.8f && dist <= 12.0f)
+                {
+                    EnterFight(closeEnemy);
+                    return;
+                }
+            }
+
+            Transform highestLevel = GetHighestCombatLevel();
+            // إذا كان الطابق القتالي النشط (Level 1, 2, 3) أعلى من موقع البوت الحالي، يصعد فوراً عبر الممرات!
+            if (highestLevel != null && (highestLevel.position.y - transform.position.y) > 2.0f)
+            {
+                currentState = BotState.Advance;
+                hasDestination = false;
+                currentTargetLevel = null;
                 return;
             }
 
@@ -681,7 +698,10 @@ public class BotController : NetworkBehaviour
         bool isRanged = combat != null && (combat.attackType == CharacterCombat.AttackType.Ranged || combat.attackRange >= 5.5f);
         float effectiveRange = isRanged ? Mathf.Max(combat.attackRange * 0.85f, 7.5f) : Mathf.Max(fightStoppingDistance, 2.6f);
 
-        if (distance <= effectiveRange)
+        float verticalDist = Mathf.Abs(enemyTarget.position.y - transform.position.y);
+        bool onSameFloor = verticalDist <= 2.8f;
+
+        if (distance <= effectiveRange && onSameFloor)
         {
             Vector3 toEnemy = (enemyTarget.position - transform.position);
             toEnemy.y = 0f;
@@ -741,7 +761,7 @@ public class BotController : NetworkBehaviour
                 {
                     nextRepathTime = Time.time + 0.35f;
                     agent.isStopped = false;
-                    agent.stoppingDistance = isRanged ? 5.0f : fightStoppingDistance;
+                    agent.stoppingDistance = onSameFloor ? (isRanged ? 5.0f : fightStoppingDistance) : 0.4f;
                     agent.SetDestination(enemyTarget.position);
                 }
             }

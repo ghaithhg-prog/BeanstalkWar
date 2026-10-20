@@ -186,6 +186,19 @@ public class EnchantedForestDecorator : MonoBehaviour
 
         if (localPlayer != null)
         {
+            // 3. الانتظار حتى اكتمال بناء وتجهيز شبكة الملاحة والسلالم الحلزونية (NavMesh) بالكامل
+            while (Time.timeSinceLevelLoad < 0.95f)
+            {
+                yield return null;
+            }
+
+            // تأكيد بناء شبكة الملاحة لضمان جاهزية جميع المنصات والسلالم للبوتات
+            if (LevelBossManager.Instance != null)
+            {
+                LevelBossManager.Instance.Invoke("RebuildNavigationMesh", 0.05f);
+                yield return new WaitForSeconds(0.1f);
+            }
+
             // تطبيق الفريق المحفوظ
             localPlayer.RequestTeam(MatchEndStatsUI.savedTeam);
             localPlayer.team = MatchEndStatsUI.savedTeam;
@@ -194,7 +207,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             localPlayer.RequestCharacter(MatchEndStatsUI.savedCharacterID);
             localPlayer.ApplyCharacter(MatchEndStatsUI.savedCharacterID);
 
-            // إنشاء فرق البوتات 5v5 بتوزيع متباعد
+            // إنشاء فرق البوتات 5v5 بتوزيع متباعد على شبكة الملاحة الجاهزة
             if (BotManager.Instance != null)
             {
                 BotManager.Instance.CreateOfflineBots(localPlayer);
