@@ -430,6 +430,8 @@ public class LevelBoss : NetworkBehaviour
         }
     }
 
+    private bool hasBossBeenAwakenedBefore = false;
+
     /// <summary>إيقاظ فوري ومباشر للزعيم عند فتح مستواه من قبل TreeLevelManager</summary>
     public void AwakenBossNow(Vector3 platformPos)
     {
@@ -446,14 +448,15 @@ public class LevelBoss : NetworkBehaviour
         SetBossDormant(false);
 
         if (health == null) health = GetComponent<Health>();
-        if (health != null)
+        if (!hasBossBeenAwakenedBefore)
         {
-            health.maxHealth = maxBossHealth;
-            if (health.currentHealth < maxBossHealth && !health.isDead)
+            hasBossBeenAwakenedBefore = true;
+            if (health != null)
             {
+                health.maxHealth = maxBossHealth;
                 health.currentHealth = maxBossHealth;
+                health.isDead = false;
             }
-            health.isDead = false;
         }
 
         if (agent != null)
@@ -577,15 +580,6 @@ public class LevelBoss : NetworkBehaviour
         if (bossLight != null)
         {
             bossLight.intensity = 3f + Mathf.PingPong(Time.time * 3f, 2.5f);
-        }
-
-        if (health != null && health.maxHealth < 4000f)
-        {
-            health.maxHealth = maxBossHealth;
-            if (health.currentHealth < 4000f && !health.isDead)
-            {
-                health.currentHealth = maxBossHealth;
-            }
         }
 
         bool isServerOrAuthority = NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;

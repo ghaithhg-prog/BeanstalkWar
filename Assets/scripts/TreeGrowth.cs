@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 public class TreeGrowth : MonoBehaviour
@@ -27,8 +27,27 @@ public class TreeGrowth : MonoBehaviour
     public float shakeAmount = 0.1f;
 
     [Header("Health")]
-    public float maxHealth = 7200f;
+    public float maxHealth = 9500f;
     public float currentHealth;
+
+    [Header("Divine Shield 10s Countdown")]
+    public static float ShieldCollapseCountdown { get; private set; } = 10f;
+    public static bool IsShieldCollapsing { get; private set; } = false;
+    private static bool allBossesDefeatedDetected = false;
+
+    public static bool IsShieldActive
+    {
+        get
+        {
+            if (LevelBossManager.Instance == null || !LevelBossManager.Instance.AreAllBossesDefeated)
+                return true;
+
+            if (ShieldCollapseCountdown > 0f)
+                return true;
+
+            return false;
+        }
+    }
 
     [Header("Critical State")]
     public float criticalDuration = 4f;
@@ -54,9 +73,12 @@ public class TreeGrowth : MonoBehaviour
     {
         Instance = this;
         // إجبار القيم دائماً لتجاوز أي قيمة قديمة محفوظة في المشهد
-        maxHealth = 7200f;
-        rescueHealThreshold = 1000f;
+        maxHealth = 9500f;
+        rescueHealThreshold = 1200f;
         currentHealth = maxHealth;
+        ShieldCollapseCountdown = 10f;
+        IsShieldCollapsing = false;
+        allBossesDefeatedDetected = false;
 
         level1Height = 5.80f;
         level2Height = 15.70f;
@@ -78,9 +100,12 @@ public class TreeGrowth : MonoBehaviour
 
     void Start()
     {
-        maxHealth = 7200f;
-        rescueHealThreshold = 1000f;
+        maxHealth = 9500f;
+        rescueHealThreshold = 1200f;
         currentHealth = maxHealth;
+        ShieldCollapseCountdown = 10f;
+        IsShieldCollapsing = false;
+        allBossesDefeatedDetected = false;
 
         level1Height = 5.80f;
         level2Height = 15.70f;
@@ -158,6 +183,7 @@ public class TreeGrowth : MonoBehaviour
     }
 
     // مضاعف الضرر والعلاج بحسب مستوى الارتفاع الذي يقف عنده اللاعب
+    // بناءً على تصميم غيث الدقيق: 20% من الأرض، 35% في الطابق 1، 50% في الطابق 2، 100% في الطابق 3 والقمة
     public static float GetHeightMultiplier(Vector3 attackerPosition)
     {
         float y = attackerPosition.y;
@@ -169,21 +195,44 @@ public class TreeGrowth : MonoBehaviour
             Transform l2 = treeLevels.transform.Find("Level_2");
             Transform l1 = treeLevels.transform.Find("Level_1");
 
-            if (l3 != null && y >= l3.position.y - 1.5f) return 3.0f; // Level 3 / Top: 300%
-            if (l2 != null && y >= l2.position.y - 1.5f) return 2.2f; // Level 2: 220%
-            if (l1 != null && y >= l1.position.y - 1.5f) return 1.5f; // Level 1: 150%
-            return 1.0f; // Ground / Base: 100%
+            if (l3 != null && y >= l3.position.y - 1.5f) return 1.00f; // Level 3 / Top: 100% (أقصى قوة كاملة)
+            if (l2 != null && y >= l2.position.y - 1.5f) return 0.50f; // Level 2: 50%
+            if (l1 != null && y >= l1.position.y - 1.5f) return 0.35f; // Level 1: 35%
+            return 0.20f; // Ground / Base (تحت المستوى الأول): 20%
         }
 
-        if (y >= 18f) return 3.0f;
-        if (y >= 10f) return 2.2f;
-        if (y >= 4f)  return 1.5f;
-        return 1.0f;
+        if (y >= 22f) return 1.00f;
+        if (y >= 14f) return 0.50f;
+        if (y >= 4.5f) return 0.35f;
+        return 0.20f;
     }
 
     void Update()
     {
         UpdateHealthBar();
+
+        // إدارة مؤقت العد التنازلي لـ 10 ثوانٍ لصمود درع الشجرة بعد هزيمة الزعماء الثلاثة
+        if (LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated)
+        {
+            if (!allBossesDefeatedDetected)
+            {
+                allBossesDefeatedDetected = true;
+                IsShieldCollapsing = true;
+                ShieldCollapseCountdown = 10f;
+            }
+
+            if (ShieldCollapseCountdown > 0f)
+            {
+                ShieldCollapseCountdown -= Time.deltaTime;
+                if (ShieldCollapseCountdown <= 0f)
+                {
+                    ShieldCollapseCountdown = 0f;
+                    IsShieldCollapsing = false;
+                    Debug.Log("💥 [TreeGrowth] The 10-second Divine Shield countdown has ended! Tree is now vulnerable!");
+                    ThirdPersonCamera.Shake(0.8f, 0.45f);
+                }
+            }
+        }
 
         bool isMatchPlaying = GameStateManager.Instance == null ||
                               GameStateManager.Instance.currentState == GameStateManager.GameState.Playing;
@@ -298,9 +347,8 @@ public class TreeGrowth : MonoBehaviour
 
     void CheckDeath()
     {
-        // درع الزعماء الثلاثة: لا يمكن إماتة الشجرة أو دخول الحالة الحرجة إلا بعد هزيمة الزعماء الثلاثة
-        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
-        if (shieldActive) return;
+        // درع الزعماء الثلاثة والعد التنازلي لـ 10 ثوانٍ: لا يمكن إماتة الشجرة طالما الدرع فعال
+        if (IsShieldActive) return;
 
         if (currentHealth <= 0 && !isDead)
         {
@@ -321,8 +369,7 @@ public class TreeGrowth : MonoBehaviour
 
     void EnterCriticalState()
     {
-        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
-        if (shieldActive) return;
+        if (IsShieldActive) return;
 
         isCritical = true;
         criticalUsed = true;
@@ -644,41 +691,7 @@ public class TreeGrowth : MonoBehaviour
         }
     }
 
-    void OnGUI()
-    {
-        if (!isCollapsingBannerActive) return;
 
-        float bannerW = Mathf.Min(Screen.width * 0.88f, 700f);
-        float bannerH = 60f;
-        float bx = (Screen.width - bannerW) / 2f;
-        float by = 60f;
-
-        Rect bannerRect = new Rect(bx, by, bannerW, bannerH);
-        EnchantedNatureGUI.DrawWoodPlate(bannerRect, new Color(0.35f, 0.08f, 0.05f, 0.95f), new Color(1f, 0.45f, 0.15f, 0.95f));
-
-        GUIStyle style = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 18,
-            fontStyle = FontStyle.Bold
-        };
-        style.normal.textColor = new Color(1f, 0.88f, 0.2f);
-
-        string collapseText = LanguageSelectionUI.Localize(
-            "🔥 THE SACRED TREE IS COLLAPSING! 🔥",
-            "🔥 الشجرة المقدسة تنهار وتسقط الآن! 🔥",
-            "🔥 СВЯЩЕННОЕ ДЕРЕВО ПАДАЕТ! 🔥",
-            "🔥 ¡EL ÁRBOL SAGRADO SE DERRUMBA! 🔥",
-            "🔥 L'ARBRE SACRÉ S'EFFONDRE ! 🔥",
-            "🔥 DER HEILIGE BAUM STÜRZT EIN! 🔥",
-            "🔥 पवित्र वृक्ष गिर रहा है! 🔥",
-            "🔥 神圣巨树正在倾覆倒塌！🔥",
-            "🔥 聖なる巨木が倒壊している！🔥",
-            "🔥 A ÁRVORE SAGRADA ESTÁ DESABANDO! 🔥"
-        );
-
-        GUI.Label(bannerRect, collapseText, style);
-    }
 
     // =========================
     // Health
@@ -700,8 +713,8 @@ public class TreeGrowth : MonoBehaviour
 
         currentHealth -= amount;
 
-        // درع الأختام الثلاثة: لا يمكن إسقاط الشجرة أو إنزال صحتها تحت 30% إلا بعد هزيمة الزعماء الثلاثة جميعاً!
-        bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+        // درع الأختام الثلاثة والعد التنازلي لـ 10 ثوانٍ: لا يمكن إسقاط الشجرة أو إنزال صحتها تحت 30% طالما الدرع فعال!
+        bool shieldActive = IsShieldActive;
         float minAllowedHealth = shieldActive ? (maxHealth * 0.30f) : 0f;
 
         currentHealth = Mathf.Clamp(currentHealth, minAllowedHealth, maxHealth);
@@ -733,7 +746,7 @@ public class TreeGrowth : MonoBehaviour
         {
             float healthPercent = currentHealth / maxHealth;
             healthBarFill.fillAmount = healthPercent;
-            bool shieldActive = (LevelBossManager.Instance == null) || !LevelBossManager.Instance.AreAllBossesDefeated;
+            bool shieldActive = IsShieldActive;
             if (shieldActive && healthPercent <= 0.31f)
             {
                 // لون ذهبي متوهج يدل على أن درع الزعماء الثلاثة يحمي الشجرة من السقوط (صامدة عند 30%)
@@ -744,5 +757,124 @@ public class TreeGrowth : MonoBehaviour
                 healthBarFill.color = Color.Lerp(Color.red, Color.green, healthPercent);
             }
         }
+    }
+
+    // =========================
+    // واجهة شريط صحة الشجرة وحالة الدرع بكل اللغات
+    // =========================
+    void OnGUI()
+    {
+        if (GameStateManager.Instance != null && !GameStateManager.Instance.IsPlaying()) return;
+
+        if (isCollapsingBannerActive)
+        {
+            float bannerW = Mathf.Min(Screen.width * 0.88f, 700f);
+            float bannerH = 60f;
+            float bx = (Screen.width - bannerW) / 2f;
+            float by = 60f;
+
+            Rect bannerRect = new Rect(bx, by, bannerW, bannerH);
+            EnchantedNatureGUI.DrawWoodPlate(bannerRect, new Color(0.35f, 0.08f, 0.05f, 0.95f), new Color(1f, 0.45f, 0.15f, 0.95f));
+
+            GUIStyle collapseStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 18,
+                fontStyle = FontStyle.Bold
+            };
+            collapseStyle.normal.textColor = new Color(1f, 0.88f, 0.2f);
+
+            string collapseText = LanguageSelectionUI.Localize(
+                "🔥 THE SACRED TREE IS COLLAPSING! 🔥",
+                "🔥 الشجرة المقدسة تنهار وتسقط الآن! 🔥",
+                "🔥 СВЯЩЕННОЕ ДЕРЕВО ПАДАЕТ! 🔥",
+                "🔥 ¡EL ÁRBOL SAGRADO SE DERRUMBA! 🔥",
+                "🔥 L'ARBRE SACRÉ S'EFFONDRE ! 🔥",
+                "🔥 DER HEILIGE BAUM STÜRZT EIN! 🔥",
+                "🔥 पवित्र वृक्ष गिर रहा है! 🔥",
+                "🔥 神圣巨树正在倾覆倒塌！🔥",
+                "🔥 聖なる巨木が倒壊している！🔥",
+                "🔥 A ÁRVORE SAGRADA ESTÁ DESABANDO! 🔥"
+            );
+
+            GUI.Label(bannerRect, collapseText, collapseStyle);
+        }
+
+        float sw = Screen.width;
+        float barW = Mathf.Clamp(sw * 0.45f, 320f, 540f);
+        float barH = 34f;
+        float barX = (sw - barW) * 0.5f;
+        float barY = 10f;
+
+        // 1. عنوان صحة الشجرة بكل اللغات المدعومة
+        string treeTitle = LanguageSelectionUI.Localize(
+            "🌳 GREAT BEANSTALK HEALTH",
+            ar: "🌳 صحة شجرة الفاصولياء العظيمة",
+            ru: "🌳 ЗДОРОВЬЕ ВЕЛИКОГО СТЕБЛЯ",
+            es: "🌳 SALUD DEL GRAN TALLO SAGRADO",
+            fr: "🌳 SANTÉ DU GRAND HARICOT SACRÉ",
+            de: "🌳 GESUNDHEIT DER RIESENBOHNE",
+            hi: "🌳 महा बीनस्टॉक स्वास्थ्य",
+            zh: "🌳 巨藤神树生命值",
+            ja: "🌳 巨木の聖なる生命力",
+            pt: "🌳 SAÚDE DO PÉ DE FEIJÃO"
+        );
+
+        GUIStyle titleStyle = new GUIStyle(GUI.skin.label);
+        titleStyle.alignment = TextAnchor.MiddleCenter;
+        titleStyle.fontSize = 11;
+        titleStyle.fontStyle = FontStyle.Bold;
+        titleStyle.normal.textColor = new Color(0.85f, 1f, 0.85f);
+
+        GUI.Label(new Rect(barX, barY - 14f, barW, 16f), treeTitle, titleStyle);
+
+        // 2. حالة الدرع الإلهي ومؤقت الـ 10 ثوانٍ
+        string shieldStatus = "";
+        Color shieldColor = Color.white;
+
+        if (LevelBossManager.Instance == null || !LevelBossManager.Instance.AreAllBossesDefeated)
+        {
+            int deadCount = LevelBossManager.Instance != null ? LevelBossManager.Instance.DefeatedBossCount : 0;
+            shieldStatus = LanguageSelectionUI.Localize(
+                $"🛡️ DIVINE SHIELD ACTIVE ({deadCount}/3 BOSS SEALS BROKEN)",
+                ar: $"🛡️ الدرع الإلهي مفعل ({deadCount}/3 أختام مكسورة - اقتل كل الزعماء لإسقاطه)",
+                ru: $"🛡️ БОЖЕСТВЕННЫЙ ЩИТ АКТИВЕН ({deadCount}/3 СНЯТО)",
+                es: $"🛡️ ESCUDO SAGRADO ACTIVO ({deadCount}/3 SELLOS ROTOS)",
+                fr: $"🛡️ BOUCLIER SACRÉ ACTIF ({deadCount}/3 SCEAUX BRISÉS)"
+            );
+            shieldColor = new Color(1f, 0.85f, 0.25f);
+        }
+        else if (ShieldCollapseCountdown > 0f)
+        {
+            int sec = Mathf.CeilToInt(ShieldCollapseCountdown);
+            float ping = Mathf.PingPong(Time.time * 5f, 1f);
+            shieldColor = Color.Lerp(Color.yellow, new Color(1f, 0.3f, 0.1f), ping);
+            shieldStatus = LanguageSelectionUI.Localize(
+                $"⚠️ SACRED SHIELD COLLAPSING IN: {sec}s!",
+                ar: $"⚠️ الدرع الإلهي ينهار خلال: {sec} ثوانٍ!",
+                ru: $"⚠️ ЩИТ РУШИТСЯ ЧЕРЕЗ: {sec} с!",
+                es: $"⚠️ ¡EL ESCUDO SE DERRUMBA EN: {sec}s!",
+                fr: $"⚠️ LE BOUCLIER S'EFFONDRE DANS : {sec}s !"
+            );
+        }
+        else
+        {
+            shieldColor = new Color(1f, 0.35f, 0.35f);
+            shieldStatus = LanguageSelectionUI.Localize(
+                "⚔️ SHIELD BROKEN! THE TREE IS FULLY VULNERABLE!",
+                ar: "⚔️ سقط الدرع! الشجرة معرضة للتدمير بالكامل!",
+                ru: "⚔️ ЩИТ СЛОМАН! ДЕРЕВО УЯЗВИМО!",
+                es: "⚔️ ¡ESCUDO ROTO! ¡EL ÁRBOL ESTÁ VULNERABLE!",
+                fr: "⚔️ BOUCLIER BRISÉ ! L'ARBRE EST VULNÉRABLE !"
+            );
+        }
+
+        GUIStyle shieldStyle = new GUIStyle(GUI.skin.label);
+        shieldStyle.alignment = TextAnchor.MiddleCenter;
+        shieldStyle.fontSize = 10;
+        shieldStyle.fontStyle = FontStyle.Bold;
+        shieldStyle.normal.textColor = shieldColor;
+
+        GUI.Label(new Rect(barX - 100f, barY + barH + 6f, barW + 200f, 18f), shieldStatus, shieldStyle);
     }
 }

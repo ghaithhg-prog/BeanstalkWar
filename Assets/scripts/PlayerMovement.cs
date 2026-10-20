@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Unity.Netcode;
 
 public class PlayerMovement : NetworkBehaviour
@@ -60,7 +60,7 @@ public class PlayerMovement : NetworkBehaviour
             NetworkVariableWritePermission.Server
         );
 
-    public float crystalSpeedMultiplier = 0.82f;
+    public float crystalSpeedMultiplier = 1.35f;
 
     [Header("Movement")]
     public float walkSpeed = 6f;
@@ -916,23 +916,82 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     private float lastJumpTime = -10f;
+    private bool wasAirborne = false;
+    private float highestFallY = float.MinValue;
 
     void CheckGroundedRaycast()
     {
-        if (Time.time - lastJumpTime < 0.30f) return;
-
-        Vector3 origin = transform.position + Vector3.up * 0.2f;
-        if (Physics.SphereCast(origin, 0.35f, Vector3.down, out RaycastHit hit, 0.35f, ~LayerMask.GetMask("Ignore Raycast")))
+        bool isCurrentlyGrounded = false;
+        Vector3 origin = transform.position + Vector3.up * 0.25f;
+        if (Physics.SphereCast(origin, 0.30f, Vector3.down, out RaycastHit hit, 0.40f, ~LayerMask.GetMask("Ignore Raycast")))
         {
-            if (!hit.collider.isTrigger && hit.collider.gameObject != gameObject)
+            if (!hit.collider.isTrigger && hit.collider.gameObject != gameObject && !hit.collider.transform.IsChildOf(transform))
             {
-                jumpCount = 0;
+                isCurrentlyGrounded = true;
+                if (Time.time - lastJumpTime >= 0.25f)
+                {
+                    jumpCount = 0;
+                }
+            }
+        }
+
+        if (Time.time - lastJumpTime < 0.25f)
+        {
+            isCurrentlyGrounded = false;
+        }
+
+        TrackFallDamage(isCurrentlyGrounded);
+    }
+
+    void TrackFallDamage(bool grounded)
+    {
+        if (!grounded)
+        {
+            if (!wasAirborne)
+            {
+                wasAirborne = true;
+                highestFallY = transform.position.y;
+            }
+            else if (transform.position.y > highestFallY)
+            {
+                highestFallY = transform.position.y;
+            }
+        }
+        else
+        {
+            if (wasAirborne)
+            {
+                float fallDistance = highestFallY - transform.position.y;
+                wasAirborne = false;
+                highestFallY = float.MinValue;
+
+                if (fallDistance > 6.0f)
+                {
+                    bool carryingCrystal = (isCarryingCrystal != null && isCarryingCrystal.Value);
+                    if (carryingCrystal)
+                    {
+                        Debug.Log($"🕊️ [Sacred Feather Fall] Crystal bearer landed safely with 0 damage from {fallDistance:F1}m drop!");
+                    }
+                    else
+                    {
+                        float fallDamage = Mathf.Clamp((fallDistance - 6.0f) * 4.5f, 12f, 38f);
+                        Health h = GetComponent<Health>();
+                        if (h != null && !h.isDead)
+                        {
+                            h.TakeDamage(fallDamage);
+                            Health.TriggerDamageFlash(0.5f);
+                            Debug.Log($"💥 Fall damage taken: {fallDamage:F1} HP from {fallDistance:F1}m drop!");
+                        }
+                    }
+                }
             }
         }
     }
 
     public void ResetToSafeSpawn()
     {
+        wasAirborne = false;
+        highestFallY = float.MinValue;
         if (rb != null)
         {
             rb.linearVelocity = Vector3.zero;

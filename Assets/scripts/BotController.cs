@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Unity.Netcode;
 using UnityEngine.AI;
 
@@ -285,6 +285,11 @@ public class BotController : NetworkBehaviour
         {
             nextDecisionTime = Time.time + decisionInterval;
             UpdateDecision();
+        }
+
+        if (agent.isOnNavMesh && currentState != BotState.DeliverCrystal)
+        {
+            agent.speed = moveSpeed + personalOffset;
         }
 
         switch (currentState)
@@ -995,6 +1000,7 @@ public class BotController : NetworkBehaviour
         {
             agent.isStopped = false;
             agent.stoppingDistance = 0.2f;
+            agent.speed = (moveSpeed + personalOffset) * 1.35f; // +35% crystal sprint
         }
 
         CrystalAltar altar = FindClosestAltar();

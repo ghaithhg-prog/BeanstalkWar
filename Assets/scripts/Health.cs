@@ -9,6 +9,8 @@ public class Health : MonoBehaviour
     public float maxHealth = 200f;
     public float currentHealth;
     public bool isDead = false;
+    public static float damageFlashTimer = 0f;
+    public static void TriggerDamageFlash(float intensity = 0.5f) { damageFlashTimer = Mathf.Max(damageFlashTimer, intensity); }
 
     private bool initialized = false;
 
@@ -44,7 +46,7 @@ public class Health : MonoBehaviour
         if (boss != null)
         {
             maxHealth = boss.maxBossHealth;
-            if (currentHealth <= 0f || currentHealth < 2000f) currentHealth = boss.maxBossHealth;
+            if (!initialized || currentHealth <= 0f) currentHealth = boss.maxBossHealth;
             isDead = false;
             initialized = true;
         }
@@ -79,6 +81,8 @@ public class Health : MonoBehaviour
 
         currentHealth -= amount;
         currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        PlayerMovement pmDmg = GetComponent<PlayerMovement>();
+        if (pmDmg != null && pmDmg.IsOwner && GetComponent<BotController>() == null) TriggerDamageFlash(0.45f);
 
         if (currentHealth <= 0)
             Die();
@@ -319,6 +323,18 @@ public class Health : MonoBehaviour
         PlayerMovement player = GetComponent<PlayerMovement>();
         BotController bot = GetComponent<BotController>();
         bool isHumanOwner = player != null && player.IsOwner && bot == null;
+        if (damageFlashTimer > 0f && isHumanOwner)
+        {
+            damageFlashTimer -= Time.deltaTime;
+            float alpha = Mathf.Clamp01(damageFlashTimer);
+            float borderThickness = 18f;
+            GUI.color = new Color(0.9f, 0.05f, 0.05f, alpha * 0.45f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, borderThickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, Screen.height - borderThickness, Screen.width, borderThickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(0, 0, borderThickness, Screen.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(Screen.width - borderThickness, 0, borderThickness, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
 
         if (isDead)
         {
