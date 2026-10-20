@@ -156,20 +156,22 @@ public class TreeLevelManager : MonoBehaviour
         float currentHeight = (TreeGrowth.Instance != null) ? TreeGrowth.Instance.CurrentHeight : (tree != null ? tree.localScale.y * 2f : 5.80f);
         float elapsed = (TreeGrowth.Instance != null) ? TreeGrowth.Instance.ElapsedGrowthTime : 0f;
 
-        // المستوى 2: يفتح بعد مرور 18 ثانية أو عند وصول الشجرة لارتفاع 15.0م
-        if (levels != null && levels.Length > 1 && !unlocked[1] && (elapsed >= 18.0f || currentHeight >= 15.0f))
+        int slainBosses = (LevelBossManager.Instance != null) ? LevelBossManager.Instance.DefeatedBossCount : 0;
+
+        // المستوى 2: يفتح حصراً وفقط بعد هزيمة زعيم المستوى الأول (Forest Goliath)
+        if (levels != null && levels.Length > 1 && !unlocked[1] && slainBosses >= 1)
         {
             UnlockLevel(1);
         }
 
-        // المستوى 3: يفتح بعد مرور 36 ثانية أو عند وصول الشجرة لارتفاع 25.0م
-        if (levels != null && levels.Length > 2 && !unlocked[2] && (elapsed >= 36.0f || currentHeight >= 25.0f))
+        // المستوى 3: يفتح حصراً وفقط بعد هزيمة زعيم المستوى الثاني (Inferno Titan)
+        if (levels != null && levels.Length > 2 && !unlocked[2] && slainBosses >= 2)
         {
             UnlockLevel(2);
         }
 
-        // القمة (TopLevel): تفتح بعد مرور 54 ثانية أو عند وصول الشجرة لارتفاع 39.5م وتلتصق بالمنصة تماماً
-        if (levels != null && levels.Length > 3 && !unlocked[3] && (elapsed >= 54.0f || currentHeight >= 39.5f))
+        // القمة (TopLevel): تفتح حصراً وفقط بعد هزيمة الزعماء الثلاثة جميعهم
+        if (levels != null && levels.Length > 3 && !unlocked[3] && slainBosses >= 3)
         {
             UnlockLevel(3);
         }
@@ -189,43 +191,6 @@ public class TreeLevelManager : MonoBehaviour
         unlocked[index] = true;
 
         // =========================
-        // إيقاظ الزعيم المخصص فوق المنصة
-        // =========================
-        int bossNumber = index + 1; // index 1 يفتح Level_2 (Boss 2) و index 2 يفتح Level_3 (Boss 3)
-        if (bossNumber >= 2 && bossNumber <= 3)
-        {
-            if (LevelBossManager.Instance != null)
-            {
-                LevelBossManager.Instance.AwakenBossForLevel(bossNumber);
-            }
-
-            if (cachedBosses[bossNumber] != null)
-            {
-                GameObject boss = cachedBosses[bossNumber];
-                Vector3 platformCenter = levels[index] != null ? levels[index].transform.position : boss.transform.position;
-
-                LevelBoss lb = boss.GetComponent<LevelBoss>();
-                if (lb != null)
-                {
-                    lb.AwakenBossNow(platformCenter);
-                }
-                else
-                {
-                    boss.transform.position = platformCenter + Vector3.up * 1.5f;
-                    boss.SetActive(true);
-                    UnityEngine.AI.NavMeshAgent agent = boss.GetComponent<UnityEngine.AI.NavMeshAgent>();
-                    if (agent != null)
-                    {
-                        agent.enabled = true;
-                        agent.Warp(boss.transform.position);
-                    }
-                }
-
-                Debug.Log($"🔥 BOSS AWAKENED! Level {bossNumber} Boss ({boss.name}) has spawned safely on its platform {levels[index]?.name}!");
-            }
-        }
-
-        // =========================
         // فتح الممر المؤدي إليه
         // =========================
 
@@ -236,11 +201,27 @@ public class TreeLevelManager : MonoBehaviour
 
         if (spiralConnector != null)
         {
-            spiralConnector
-                .SetSectionUnlocked(
-                    index,
-                    true
-                );
+            spiralConnector.SetSectionUnlocked(index, true);
+        }
+
+        // =========================
+        // بناء وتحديث شبكة الملاحة NavMesh فوراً
+        // =========================
+        if (LevelBossManager.Instance != null)
+        {
+            LevelBossManager.Instance.Invoke("RebuildNavigationMesh", 0.05f);
+        }
+
+        // =========================
+        // إيقاظ الزعيم المخصص فوق المنصة
+        // =========================
+        int bossNumber = index + 1; // index 1 يفتح Level_2 (Boss 2) و index 2 يفتح Level_3 (Boss 3)
+        if (bossNumber >= 2 && bossNumber <= 3)
+        {
+            if (LevelBossManager.Instance != null)
+            {
+                LevelBossManager.Instance.AwakenBossForLevel(bossNumber);
+            }
         }
 
         Debug.Log(

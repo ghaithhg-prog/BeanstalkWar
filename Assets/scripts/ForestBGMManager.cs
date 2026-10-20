@@ -2,15 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// ForestBGMManager:
-/// الموسيقى التصويرية الأسطورية الجديدة لشجرة الفاصولياء العملاقة (BeanstalkWar).
-/// تؤلف وتولد مقطوعة أوركسترالية حماسية خيالية تجمع بين:
-/// 1. طبول الحرب الإيقاعية الحماسية (Epic War Drums & Taiko).
-/// 2. وتريات السيلو والكمان الدافئة الملحمية (Orchestral Celli & Violins).
-/// 3. فلوت وناي الطبيعة الأسطوري الخيالي (Celtic Forest Flute).
-/// 4. قيثارة الهارب الساحرة المتلألئة (Shimmering Magical Harp).
-/// 
-/// المقطوعة تعمل بنظام الستيريو (Stereo) وبدوران حلقي لا نهائي (Seamless Loop) بدون أي تقطيع،
-/// وتتكامل مع شريط الصوت في قائمة الإيقاف المؤقت (In-Game Pause Menu).
+/// الموسيقى التصويرية الأسطورية لشجرة الفاصولياء العملاقة (BeanstalkWar).
+/// تحتوي على طبول حرب سينمائية حماسية (Cinematic Taiko & Battle Drums) بنبضات قوية وواضحة،
+/// مع أبواق الحرب الأوركسترالية (Heroic Brass Horns)، ووتريات السيلو، وفلوت الطبيعة الساحر وقيثارة الهارب.
 /// </summary>
 public class ForestBGMManager : MonoBehaviour
 {
@@ -18,7 +12,7 @@ public class ForestBGMManager : MonoBehaviour
 
     [Header("Audio Settings")]
     [Range(0f, 1f)]
-    public float musicVolume = 0.38f;
+    public float musicVolume = 0.45f;
 
     private AudioSource audioSource;
     private static AudioClip cachedThemeClip;
@@ -99,40 +93,33 @@ public class ForestBGMManager : MonoBehaviour
     }
 
     /// <summary>
-    /// توليد المقطوعة الملحمية: 16 مازورة موسيقية على مقام D Dorian وبسرعة 112 BPM
+    /// توليد المقطوعة الملحمية: 16 مازورة على مقام D Dorian وبسرعة 114 BPM
+    /// بطبول حرب قوية وبارزة وإيقاع حماسي متواصل
     /// </summary>
-    private static AudioClip GenerateEpicFantasyTheme()
+    public static AudioClip GenerateEpicFantasyTheme()
     {
         int sampleRate = 44100;
-        int bpm = 112;
+        int bpm = 114;
         int totalBars = 16;
         float beatsPerBar = 4f;
         float secondsPerBeat = 60f / bpm;
-        float totalDuration = totalBars * beatsPerBar * secondsPerBeat; // ~34.2857 seconds
+        float totalDuration = totalBars * beatsPerBar * secondsPerBeat;
         int totalSamples = (int)(sampleRate * totalDuration);
 
         float[] leftChannel = new float[totalSamples];
         float[] rightChannel = new float[totalSamples];
 
-        var rng = new System.Random(777);
-
-        // جدول الترددات لمقام D Minor / Dorian (بالهرتز)
-        // D3, E3, F3, G3, A3, Bb3, C4, D4, E4, F4, G4, A4, C5, D5
-        float D2 = 73.42f, F2 = 87.31f, G2 = 98.00f, A2 = 110.00f, Bb2 = 116.54f, C3 = 130.81f;
+        // ترددات مقام D Minor / Dorian
+        float D2 = 73.42f, G2 = 98.00f, A2 = 110.00f, Bb2 = 116.54f, C3 = 130.81f;
         float D3 = 146.83f, E3 = 164.81f, F3 = 174.61f, G3 = 196.00f, A3 = 220.00f, Bb3 = 233.08f, C4 = 261.63f;
         float D4 = 293.66f, E4 = 329.63f, F4 = 349.23f, G4 = 392.00f, A4 = 440.00f, Bb4 = 466.16f, C5 = 523.25f, D5 = 587.33f;
 
-        // تتابع الكوردات عبر الـ 16 مازورة:
-        // 0-3:   Dm  (D - F - A)
-        // 4-7:   Bb  (Bb - D - F) -> C (C - E - G)
-        // 8-11:  Dm  (D - F - A) -> Gm (G - Bb - D)
-        // 12-15: Bb  (Bb - D - F) -> C -> A7 (A - C# - E - G) -> Dm
         float[] rootTones = new float[]
         {
-            D2, D2, D2, D2,     // Bars 0-3: Dm
-            Bb2, Bb2, C3, C3,   // Bars 4-7: Bb -> C
-            D2, D2, G2, G2,     // Bars 8-11: Dm -> Gm
-            Bb2, Bb2, C3, A2    // Bars 12-15: Bb -> C -> A7 -> resolving smoothly to D2!
+            D2, D2, D2, D2,
+            Bb2, Bb2, C3, C3,
+            D2, D2, G2, G2,
+            Bb2, Bb2, C3, A2
         };
 
         float[][] chordTriads = new float[][]
@@ -158,8 +145,6 @@ public class ForestBGMManager : MonoBehaviour
             new float[] { A2, E3, G3, A3 }
         };
 
-        // لحن الفلوت الأسطوري (Celtic Pan Flute Motifs) عبر الموازير:
-        // كل مازورة تحمل 4 نغمات أساسية
         float[][] fluteMelody = new float[][]
         {
             new float[] { D4, F4, A4, G4 },
@@ -180,14 +165,14 @@ public class ForestBGMManager : MonoBehaviour
             new float[] { F4, G4, A4, D5 },
             new float[] { D5, C5, Bb4, A4 },
             new float[] { G4, A4, C5, E4 },
-            new float[] { F4, E4, C4, D4 } // ينتهي على D4 ليعود بلطف إلى بداية المقطوعة D4
+            new float[] { F4, E4, C4, D4 }
         };
 
         float barDuration = beatsPerBar * secondsPerBeat;
         float beatDuration = secondsPerBeat;
 
         // ==========================================
-        // 1. توليد طبول الحرب (War Drums & Percussion)
+        // 1. طبول الحرب السينمائية القوية (Epic Cinematic Taiko & War Percussion)
         // ==========================================
         for (int bar = 0; bar < totalBars; bar++)
         {
@@ -197,38 +182,63 @@ public class ForestBGMManager : MonoBehaviour
             {
                 float beatTime = barStartTime + beat * beatDuration;
 
-                // ضربة طبل أساسية (Deep Bass Drum) على النبضة 1 و 3
+                // ضربة طبل تاييكو مدوية عميقة (Heavy Sub-Bass Taiko) على 1 و 3
                 if (beat == 0 || beat == 2)
                 {
-                    AddWarDrumHit(leftChannel, rightChannel, beatTime, sampleRate, 1.0f, 68f, 0.42f);
+                    AddHeavyTaiko(leftChannel, rightChannel, beatTime, sampleRate, 1.35f);
+
+                    // ارتداد خفيف حماسي بعد الضربة الأولى
+                    if (beat == 0)
+                    {
+                        AddHeavyTaiko(leftChannel, rightChannel, beatTime + beatDuration * 0.75f, sampleRate, 0.75f);
+                    }
                 }
 
-                // ضربة طبل متوسطة (Tom / War Snare) على النبضة 2 و 4
+                // ضربة طبل الميدان الحادة العسكرية (War Field Snare & Rim Strike) على 2 و 4
                 if (beat == 1 || beat == 3)
                 {
-                    AddWarDrumHit(leftChannel, rightChannel, beatTime, sampleRate, 0.72f, 125f, 0.28f);
+                    AddWarSnare(leftChannel, rightChannel, beatTime, sampleRate, 0.95f);
                 }
 
-                // ارتداد إيقاعي حماسي متقطع (Syncopated 8th / 16th hits)
-                if (beat == 1 || beat == 3)
+                // إيقاع الخيل والفرسان الحماسي (Galloping 16th Rhythm)
+                float gallopTime = beatTime + beatDuration * 0.5f;
+                AddWarTom(leftChannel, rightChannel, gallopTime, sampleRate, 0.65f, 130f, 0.25f);
+
+                // ارتداد إيقاعي في النصف الثاني من المازورة
+                if (beat >= 2)
                 {
-                    float syncTime = beatTime + beatDuration * 0.5f;
-                    AddWarDrumHit(leftChannel, rightChannel, syncTime, sampleRate, 0.48f, 150f, 0.18f);
+                    float subBeatTime = beatTime + beatDuration * 0.25f;
+                    AddWarTom(leftChannel, rightChannel, subBeatTime, sampleRate, 0.55f, 175f, -0.3f);
                 }
 
-                // في الموازير الفردية (Climax Fill) نضيف ضربة سريعة قبيل نهاية المازورة
+                // ضربات التوم المتسارعة ونهايات الموازير (Climax Battle Fills)
                 if ((bar % 2 == 1) && beat == 3)
                 {
-                    float rollTime1 = beatTime + beatDuration * 0.25f;
-                    float rollTime2 = beatTime + beatDuration * 0.75f;
-                    AddWarDrumHit(leftChannel, rightChannel, rollTime1, sampleRate, 0.35f, 180f, 0.12f);
-                    AddWarDrumHit(leftChannel, rightChannel, rollTime2, sampleRate, 0.45f, 210f, 0.14f);
+                    AddWarTom(leftChannel, rightChannel, beatTime + beatDuration * 0.25f, sampleRate, 0.7f, 210f, -0.4f);
+                    AddWarTom(leftChannel, rightChannel, beatTime + beatDuration * 0.50f, sampleRate, 0.8f, 160f, 0.0f);
+                    AddWarTom(leftChannel, rightChannel, beatTime + beatDuration * 0.75f, sampleRate, 0.95f, 110f, 0.4f);
                 }
             }
         }
 
         // ==========================================
-        // 2. وتريات السيلو والأوركسترا الدافئة (Strings & Chords)
+        // 2. أبواق الحرب البطولية الملحمية (Heroic French Horns & Brass Fanfare)
+        // ==========================================
+        for (int bar = 0; bar < totalBars; bar++)
+        {
+            float barStart = bar * barDuration;
+            float root = rootTones[bar % rootTones.Length];
+
+            // في المقاطع الحماسية (Bars 4-7 و 12-15) تدوي الأبواق الملكية الملحمية
+            if ((bar >= 4 && bar <= 7) || (bar >= 12 && bar <= 15))
+            {
+                AddHeroicHorn(leftChannel, rightChannel, barStart, barDuration * 0.92f, root * 2f, sampleRate, 0.28f);
+                AddHeroicHorn(leftChannel, rightChannel, barStart + beatDuration * 2f, barDuration * 0.45f, root * 3f, sampleRate, 0.22f);
+            }
+        }
+
+        // ==========================================
+        // 3. وتريات السيلو والأوركسترا الدافئة (Strings & Chords)
         // ==========================================
         for (int bar = 0; bar < totalBars; bar++)
         {
@@ -236,37 +246,36 @@ public class ForestBGMManager : MonoBehaviour
             float[] triad = chordTriads[bar % chordTriads.Length];
             float bassRoot = rootTones[bar % rootTones.Length];
 
-            // نغمة الباص المنخفضة (Deep Double Bass)
-            AddSustainedStringNote(leftChannel, rightChannel, barStart, barDuration, bassRoot, sampleRate, 0.26f, -0.1f);
+            // باص السيلو العميق
+            AddSustainedStringNote(leftChannel, rightChannel, barStart, barDuration, bassRoot, sampleRate, 0.28f, -0.1f);
 
-            // وتريات الهارموني (Lush Mid Strings)
+            // وتريات الهارموني الوسطى
             for (int noteIdx = 0; noteIdx < triad.Length; noteIdx++)
             {
-                float pan = (noteIdx % 2 == 0) ? -0.35f : 0.35f;
-                AddSustainedStringNote(leftChannel, rightChannel, barStart, barDuration, triad[noteIdx], sampleRate, 0.12f, pan);
+                float pan = (noteIdx % 2 == 0) ? -0.32f : 0.32f;
+                AddSustainedStringNote(leftChannel, rightChannel, barStart, barDuration, triad[noteIdx], sampleRate, 0.13f, pan);
             }
         }
 
         // ==========================================
-        // 3. قيثارة الهارب الساحرة (Magical Plucked Harp Arpeggios)
+        // 4. قيثارة الهارب الساحرة (Magical Plucked Harp Arpeggios)
         // ==========================================
         for (int bar = 0; bar < totalBars; bar++)
         {
             float barStart = bar * barDuration;
             float[] triad = chordTriads[bar % chordTriads.Length];
 
-            // 8 نقرات هارب سريعة ومتلألئة في كل مازورة (8th note arpeggios)
             for (int h = 0; h < 8; h++)
             {
                 float harpTime = barStart + h * (barDuration / 8f);
-                float freq = triad[h % triad.Length] * 2f; // نغمة علوية متألقة
-                float pan = Mathf.Sin(h * 0.8f) * 0.65f;
+                float freq = triad[h % triad.Length] * 2f;
+                float pan = Mathf.Sin(h * 0.8f) * 0.6f;
                 AddPluckedHarpNote(leftChannel, rightChannel, harpTime, freq, sampleRate, 0.15f, pan);
             }
         }
 
         // ==========================================
-        // 4. لحن الفلوت الأسطوري (Celtic Forest Pan Flute)
+        // 5. لحن الفلوت الأسطوري (Celtic Forest Pan Flute)
         // ==========================================
         for (int bar = 0; bar < totalBars; bar++)
         {
@@ -277,36 +286,40 @@ public class ForestBGMManager : MonoBehaviour
             {
                 float noteTime = barStart + m * beatDuration;
                 float noteFreq = melody[m];
-                float noteDuration = beatDuration * 0.88f; // Legato phrasing
+                float noteDuration = beatDuration * 0.88f;
                 AddFluteNote(leftChannel, rightChannel, noteTime, noteDuration, noteFreq, sampleRate, 0.22f);
             }
         }
 
         // ==========================================
-        // 5. التنعيم الحلقي المتقاطع (Seamless Loop Crossfade)
+        // 6. التنعيم الحلقي المتقاطع (Seamless Loop Crossfade)
         // ==========================================
-        // تطبيق تلاشٍ متقاطع (Smooth Crossfade) على آخر 0.25 ثانية لدمجها تماماً مع أول 0.25 ثانية
         int fadeSamples = (int)(sampleRate * 0.25f);
         for (int i = 0; i < fadeSamples; i++)
         {
             float t = (float)i / fadeSamples;
             int tailIdx = totalSamples - fadeSamples + i;
 
-            // مزج النهاية مع البداية بسلاسة جيبية تمنع أي طقطقة نهائياً
             leftChannel[i] = leftChannel[i] * t + leftChannel[tailIdx] * (1f - t);
             rightChannel[i] = rightChannel[i] * t + rightChannel[tailIdx] * (1f - t);
 
-            // تصفير ذيل النهاية لمنع التكرار
             leftChannel[tailIdx] = leftChannel[tailIdx] * (1f - t);
             rightChannel[tailIdx] = rightChannel[tailIdx] * (1f - t);
         }
 
-        // إنشاء الـ AudioClip الستيريو وضبط البيانات
+        // دمج وموازنة الصوت النهائي بنظام الستيريو مع Soft Limiter
         float[] interleaved = new float[totalSamples * 2];
         for (int i = 0; i < totalSamples; i++)
         {
-            interleaved[i * 2] = Mathf.Clamp(leftChannel[i] * 0.82f, -1f, 1f);
-            interleaved[i * 2 + 1] = Mathf.Clamp(rightChannel[i] * 0.82f, -1f, 1f);
+            // Soft clipping ناعم للحفاظ على دفء وتفخيم ضربات الطبول دون أي تشويش رقمي
+            float l = leftChannel[i];
+            float r = rightChannel[i];
+
+            l = Mathf.Clamp(Mathf.Sin(l * 0.88f), -0.98f, 0.98f);
+            r = Mathf.Clamp(Mathf.Sin(r * 0.88f), -0.98f, 0.98f);
+
+            interleaved[i * 2] = l;
+            interleaved[i * 2 + 1] = r;
         }
 
         AudioClip themeClip = AudioClip.Create("BeanstalkWar_EpicFantasyBGM", totalSamples, 2, sampleRate, false);
@@ -314,10 +327,13 @@ public class ForestBGMManager : MonoBehaviour
         return themeClip;
     }
 
-    private static void AddWarDrumHit(float[] left, float[] right, float startTime, int sampleRate, float volume, float basePitch, float length)
+    /// <summary>
+    /// طبل التاييكو العملاق الثقيل (Heavy War Taiko Drum) مع ارتداد الصدر وهبوط التردد الزلزالي
+    /// </summary>
+    private static void AddHeavyTaiko(float[] left, float[] right, float startTime, int sampleRate, float volume)
     {
         int startSample = (int)(startTime * sampleRate);
-        int hitSamples = (int)(length * sampleRate);
+        int hitSamples = (int)(0.52f * sampleRate);
         float phase = 0f;
 
         for (int s = 0; s < hitSamples; s++)
@@ -327,19 +343,118 @@ public class ForestBGMManager : MonoBehaviour
 
             float t = (float)s / sampleRate;
 
-            // غلاف الضرب والانحدار السريع للطبل
-            float env = Mathf.Exp(-t * 12f);
-            float punch = Mathf.Exp(-t * 40f) * 1.5f;
+            // غلاف الضرب المدوّي (Punch + Body)
+            float malletClick = Mathf.Exp(-t * 60f) * 2.2f; // ضربة المضرب الخشبي الحادة
+            float bodyBoom = Mathf.Exp(-t * 9.5f);         // رنين جلد الطبل العميق
+            float subRumble = Mathf.Exp(-t * 5.5f) * 0.45f; // اهتزاز الباص تحت 50 هرتز
 
-            // انحدار التردد لمحاكاة ضربة جلد الطبل الحقيقية
-            float currentPitch = basePitch + Mathf.Exp(-t * 28f) * (basePitch * 1.8f);
-            phase += 2f * Mathf.PI * currentPitch / sampleRate;
+            // انحدار التردد لمحاكاة شد جلد الطبل الواقعي (135 هرتز إلى 46 هرتز)
+            float pitch = 46f + Mathf.Exp(-t * 32f) * 89f;
+            phase += 2f * Mathf.PI * pitch / sampleRate;
 
-            float drumWave = Mathf.Sin(phase) + Mathf.Sin(phase * 0.5f) * 0.35f;
-            float sample = (drumWave + punch) * env * volume * 0.32f;
+            float drumWave = Mathf.Sin(phase) + Mathf.Sin(phase * 0.5f) * 0.4f + Mathf.Sin(phase * 2f) * 0.15f;
+            float sample = (drumWave * (bodyBoom + subRumble) + malletClick) * volume * 0.42f;
 
             left[idx] += sample;
             right[idx] += sample;
+        }
+    }
+
+    /// <summary>
+    /// طبل الميدان العسكري الحاد (War Field Snare & Rim Crack)
+    /// </summary>
+    private static void AddWarSnare(float[] left, float[] right, float startTime, int sampleRate, float volume)
+    {
+        int startSample = (int)(startTime * sampleRate);
+        int hitSamples = (int)(0.28f * sampleRate);
+        float phase = 0f;
+        var rnd = new System.Random((int)(startTime * 1000));
+
+        for (int s = 0; s < hitSamples; s++)
+        {
+            int idx = startSample + s;
+            if (idx >= left.Length) break;
+
+            float t = (float)s / sampleRate;
+
+            float env = Mathf.Exp(-t * 22f);
+            float noise = ((float)rnd.NextDouble() * 2f - 1f) * Mathf.Exp(-t * 35f);
+
+            float pitch = 150f + Mathf.Exp(-t * 45f) * 120f;
+            phase += 2f * Mathf.PI * pitch / sampleRate;
+
+            float tone = Mathf.Sin(phase);
+            float sample = (tone * 0.65f + noise * 0.55f) * env * volume * 0.38f;
+
+            left[idx] += sample * 0.95f;
+            right[idx] += sample * 1.05f;
+        }
+    }
+
+    /// <summary>
+    /// ضربات التوم الحربية الإيقاعية المتتابعة (War Tom-Toms & Fills)
+    /// </summary>
+    private static void AddWarTom(float[] left, float[] right, float startTime, int sampleRate, float volume, float basePitch, float pan)
+    {
+        int startSample = (int)(startTime * sampleRate);
+        int hitSamples = (int)(0.35f * sampleRate);
+        float phase = 0f;
+
+        float panL = Mathf.Clamp01((1f - pan) * 0.5f);
+        float panR = Mathf.Clamp01((1f + pan) * 0.5f);
+
+        for (int s = 0; s < hitSamples; s++)
+        {
+            int idx = startSample + s;
+            if (idx >= left.Length) break;
+
+            float t = (float)s / sampleRate;
+
+            float env = Mathf.Exp(-t * 14f);
+            float punch = Mathf.Exp(-t * 45f) * 1.2f;
+
+            float pitch = basePitch + Mathf.Exp(-t * 30f) * (basePitch * 0.85f);
+            phase += 2f * Mathf.PI * pitch / sampleRate;
+
+            float wave = Mathf.Sin(phase) + Mathf.Sin(phase * 1.5f) * 0.25f;
+            float sample = (wave + punch) * env * volume * 0.35f;
+
+            left[idx] += sample * panL;
+            right[idx] += sample * panR;
+        }
+    }
+
+    /// <summary>
+    /// أبواق الحرب الأوركسترالية البطولية (Heroic French Horns / War Brass)
+    /// </summary>
+    private static void AddHeroicHorn(float[] left, float[] right, float startTime, float duration, float freq, int sampleRate, float volume)
+    {
+        int startSample = (int)(startTime * sampleRate);
+        int noteSamples = (int)(duration * sampleRate);
+        float phase1 = 0f;
+        float phase2 = 0.25f;
+
+        for (int s = 0; s < noteSamples; s++)
+        {
+            int idx = startSample + s;
+            if (idx >= left.Length) break;
+
+            float t = (float)s / duration;
+
+            // غلاف البوق البطولي الملحمي (Brass Swell & Release)
+            float attack = Mathf.Clamp01((float)s / (sampleRate * 0.12f));
+            float release = Mathf.Clamp01((float)(noteSamples - s) / (sampleRate * 0.15f));
+            float env = attack * release;
+
+            phase1 += 2f * Mathf.PI * freq / sampleRate;
+            phase2 += 2f * Mathf.PI * (freq * 2.002f) / sampleRate;
+
+            // انسجام نغمي نحاسي دافئ (Brass Harmonics)
+            float horn = Mathf.Sin(phase1) * 0.65f + Mathf.Sin(phase2) * 0.35f + Mathf.Sin(phase1 * 3f) * 0.15f;
+            float sample = horn * env * volume;
+
+            left[idx] += sample * 0.55f;
+            right[idx] += sample * 0.45f;
         }
     }
 
@@ -359,21 +474,16 @@ public class ForestBGMManager : MonoBehaviour
             int idx = startSample + s;
             if (idx >= left.Length) break;
 
-            float t = (float)s / duration;
-
-            // غلاف ناعم (Attack / Sustain / Release)
             float attack = Mathf.Clamp01((float)s / (sampleRate * 0.22f));
             float release = Mathf.Clamp01((float)(noteSamples - s) / (sampleRate * 0.22f));
             float env = attack * release;
 
-            // اهتزاز حيوي لطيف (Vibrato)
             float vibrato = Mathf.Sin(2f * Mathf.PI * 4.8f * ((float)s / sampleRate)) * 0.015f;
             float noteFreq = freq * (1f + vibrato);
 
             phase1 += 2f * Mathf.PI * noteFreq / sampleRate;
-            phase2 += 2f * Mathf.PI * (noteFreq * 1.004f) / sampleRate; // جوقة خفيفة (Chorus detune)
+            phase2 += 2f * Mathf.PI * (noteFreq * 1.004f) / sampleRate;
 
-            // مزيج نغمي ناعم يشبه وتريات السيلو
             float wave = (Mathf.Sin(phase1) * 0.65f + Mathf.Sin(phase2) * 0.35f);
             float sample = wave * env * volume;
 
@@ -401,7 +511,6 @@ public class ForestBGMManager : MonoBehaviour
             float env = Mathf.Exp(-t * 9f);
 
             phase += 2f * Mathf.PI * freq / sampleRate;
-            // نغمة قيثارة مع انسجام علوي متألق (Harmonic Shimmer)
             float wave = Mathf.Sin(phase) * 0.7f + Mathf.Sin(phase * 2f) * 0.25f + Mathf.Sin(phase * 3f) * 0.05f;
             float sample = wave * env * volume;
 
@@ -423,7 +532,6 @@ public class ForestBGMManager : MonoBehaviour
             int idx = startSample + s;
             if (idx >= left.Length) break;
 
-            // هجوم تدريجي للنفس ثم استقرار ثم تلاشٍ لطيف
             float attack = Mathf.Clamp01((float)s / (sampleRate * 0.09f));
             float release = Mathf.Clamp01((float)(noteSamples - s) / (sampleRate * 0.09f));
             float env = attack * release;
@@ -434,11 +542,9 @@ public class ForestBGMManager : MonoBehaviour
             phase += 2f * Mathf.PI * noteFreq / sampleRate;
             breathPhase += 2f * Mathf.PI * (noteFreq * 2.01f) / sampleRate;
 
-            // صوت الفلوت الخشبي النقي مع لمسة هواء ساحرة
             float flute = Mathf.Sin(phase) * 0.82f + Mathf.Sin(phase * 2f) * 0.15f + Mathf.Sin(breathPhase) * 0.03f;
             float sample = flute * env * volume;
 
-            // في المنتصف مع اتساع ستيريو لطيف
             left[idx] += sample * 0.52f;
             right[idx] += sample * 0.48f;
         }

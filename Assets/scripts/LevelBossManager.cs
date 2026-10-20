@@ -50,6 +50,9 @@ public class LevelBossManager : MonoBehaviour
         Instance = this;
         defeatedBossLevels.Clear();
         allThreeBossesTriggered = false;
+        bossesSpawned = false;
+        System.Array.Clear(tierSpawned, 0, tierSpawned.Length);
+        configuredBossInstanceIDs.Clear();
 
         CleanupDuplicateBossesAndAdoptSceneBosses();
     }
@@ -218,7 +221,20 @@ public class LevelBossManager : MonoBehaviour
             levelTr.gameObject.SetActive(true);
         }
 
-        Vector3 spawnPos = levelTr != null ? levelTr.position + Vector3.up * 1.5f : new Vector3(-12.18f, level * 10f - 3.5f, 19.77f);
+        float expectedY = level switch
+        {
+            1 => 6.5f,
+            2 => 16.5f,
+            3 => 26.5f,
+            _ => 6.5f
+        };
+
+        Vector3 spawnPos = (levelTr != null)
+            ? new Vector3(levelTr.position.x, Mathf.Max(levelTr.position.y + 1.5f, expectedY), levelTr.position.z)
+            : new Vector3(0f, expectedY, 0f);
+
+        // بناء شبكة الملاحة أولاً لضمان وجود سطح ملاحة حقيقي تحت قدمي الزعيم الجديد لمنع سقوطه للطابق السفلي
+        RebuildNavigationMesh();
 
         // البحث عن الزعيم الموجود مسبقاً
         LevelBoss[] allBosses = FindObjectsByType<LevelBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None);

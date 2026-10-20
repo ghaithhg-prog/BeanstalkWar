@@ -74,11 +74,9 @@ public class CrystalItem : NetworkBehaviour
         FindTopSpawnPoint();
         FindGroundSpawnPoints();
 
-        if (IsServerOrAuthority && (LevelBossManager.Instance == null || !LevelBossManager.Instance.AreAllBossesDefeated))
-        {
-            hasSpawnedOnField = false;
-            ApplyVisualActiveLocal(false);
-        }
+        // إخفاء الكريستالة فوراً عند بدء المشهد حتى يموت الزعماء الثلاثة جميعهم
+        hasSpawnedOnField = false;
+        ApplyVisualActiveLocal(false);
     }
 
     public override void OnNetworkSpawn()
@@ -118,7 +116,7 @@ public class CrystalItem : NetworkBehaviour
     {
         if (IsServerOrAuthority)
         {
-            if (LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated)
+            if (LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated)
             {
                 SpawnAtTopServer();
             }
@@ -196,8 +194,8 @@ public class CrystalItem : NetworkBehaviour
     {
         if (!IsServerOrAuthority) return;
 
-        // لا تظهر الكريستالة إلا بعد هزيمة الزعماء الثلاثة جميعاً!
-        if (LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
+        // لا تظهر الكريستالة إلا بعد هزيمة الزعماء الثلاثة جميعاً وبشكل مؤكد!
+        if (LevelBossManager.Instance == null || !LevelBossManager.Instance.AreAllBossesDefeated)
         {
             hasSpawnedOnField = false;
             ApplyVisualActiveLocal(false);
@@ -294,8 +292,8 @@ public class CrystalItem : NetworkBehaviour
 
     public bool IsAvailableForPickup =>
         !isCarried.Value &&
-        (LevelBossManager.Instance == null || LevelBossManager.Instance.AreAllBossesDefeated) &&
-        (hasSpawnedOnField || isDropped.Value || (visualModel != null && visualModel.activeInHierarchy));
+        (LevelBossManager.Instance != null && LevelBossManager.Instance.AreAllBossesDefeated) &&
+        (hasSpawnedOnField || isDropped.Value);
 
     void UpdateServerLogic()
     {

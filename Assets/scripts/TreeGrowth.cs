@@ -217,43 +217,51 @@ public class TreeGrowth : MonoBehaviour
     // Growth
     // =========================
 
+    public float GetCurrentMaxAllowedHeight()
+    {
+        int bossesSlain = (LevelBossManager.Instance != null) ? LevelBossManager.Instance.DefeatedBossCount : 0;
+        switch (bossesSlain)
+        {
+            case 0:
+                return level1Height; // 5.80f (الطور الأول - متوقفة عند المستوى 1 حتى يهزم الزعيم الأول)
+            case 1:
+                return level2Height; // 15.70f (الطور الثاني - متوقفة عند المستوى 2 حتى يهزم الزعيم الثاني)
+            case 2:
+                return level3Height; // 25.70f (الطور الثالث - متوقفة عند المستوى 3 حتى يهزم الزعيم الثالث)
+            default:
+                return topLevelHeight; // 40.0f (بلوغ القمة والمهد بعد موت الزعماء الثلاثة)
+        }
+    }
+
     void GrowTree()
     {
         if (!isMature)
         {
             ElapsedGrowthTime += Time.deltaTime;
 
-            float targetHeight;
-            if (ElapsedGrowthTime <= stage1Duration)
+            float maxAllowedHeight = GetCurrentMaxAllowedHeight();
+
+            // تنمو الشجرة بسلاسة نحو الحد الأقصى المسموح به حالياً حسب عدد الزعماء المهزومين
+            if (CurrentHeight < maxAllowedHeight)
             {
-                float t = Mathf.Clamp01(ElapsedGrowthTime / stage1Duration);
-                targetHeight = Mathf.Lerp(level1Height, level2Height, t);
-            }
-            else if (ElapsedGrowthTime <= stage1Duration + stage2Duration)
-            {
-                float t = Mathf.Clamp01((ElapsedGrowthTime - stage1Duration) / stage2Duration);
-                targetHeight = Mathf.Lerp(level2Height, level3Height, t);
-            }
-            else if (ElapsedGrowthTime <= stage1Duration + stage2Duration + stage3Duration)
-            {
-                float t = Mathf.Clamp01((ElapsedGrowthTime - stage1Duration - stage2Duration) / stage3Duration);
-                targetHeight = Mathf.Lerp(level3Height, topLevelHeight, t);
-            }
-            else
-            {
-                targetHeight = topLevelHeight;
-                isMature = true;
-                StartShake(); // اهتزاز عند بلوغ القمة ونضج الشجرة
+                CurrentHeight = Mathf.MoveTowards(CurrentHeight, maxAllowedHeight, 3.8f * Time.deltaTime);
+
+                if (Mathf.Abs(CurrentHeight - topLevelHeight) < 0.08f && maxAllowedHeight >= (topLevelHeight - 0.1f))
+                {
+                    CurrentHeight = topLevelHeight;
+                    isMature = true;
+                    StartShake(); // اهتزاز عند بلوغ القمة ونضج الشجرة بالكامل
+                    OnTreeReachedTopLevel?.Invoke();
+                }
             }
 
-            CurrentHeight = targetHeight;
             MeshRenderer treeMr = GetComponent<MeshRenderer>();
             if (treeMr != null && treeMr.enabled) treeMr.enabled = false;
 
-            transform.localScale = new Vector3(6f, targetHeight * 0.5f, 6f);
-            transform.localPosition = new Vector3(0f, targetHeight * 0.5f, 0f);
+            transform.localScale = new Vector3(6f, CurrentHeight * 0.5f, 6f);
+            transform.localPosition = new Vector3(0f, CurrentHeight * 0.5f, 0f);
 
-            MajesticTrunkGrowth.Instance?.UpdateGrowth(targetHeight);
+            MajesticTrunkGrowth.Instance?.UpdateGrowth(CurrentHeight);
         }
     }
 
