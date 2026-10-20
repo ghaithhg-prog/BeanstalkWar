@@ -35,6 +35,9 @@ public class CharacterVisualAnimator : MonoBehaviour
     public float bobAmount = 0.045f;
     public float breathingSpeed = 2.2f;
 
+    [Header("Preview / Showcase Mode")]
+    public bool isPreviewShowcase = false;
+
     // Base initial rotations
     private Quaternion initHipsRot;
     private Quaternion initSpineRot;
@@ -268,8 +271,8 @@ public class CharacterVisualAnimator : MonoBehaviour
 
             // Spine / Chest / Head
             else if (spine == null && n.Contains("spine") && !n.Contains("spine1") && !n.Contains("spine2")) spine = t;
-            else if (chest == null && (n.Contains("chest") || n.Contains("spine2") || n.Contains("spine1"))) chest = t;
-            else if (head == null && n.Contains("head") && !n.Contains("top")) head = t;
+            else if (chest == null && (n.Contains("chest") || n.Contains("spine2") || n.Contains("spine1") || n.Contains("torso"))) chest = t;
+            else if (head == null && (n.Contains("head") || n.Contains("neck")) && !n.Contains("top")) head = t;
 
             // Left Leg
             else if (leftUpLeg == null && (n.Contains("leftupleg") || (n.Contains("upper_leg") && n.Contains(".l")) || n.Contains("thigh.l"))) leftUpLeg = t;
@@ -514,22 +517,53 @@ public class CharacterVisualAnimator : MonoBehaviour
         float legSin = Mathf.Sin(walkCycle);
         float legCos = Mathf.Cos(walkCycle);
 
-        // Pelvis bobbing & weight transfer
-        float bob = Mathf.Abs(legSin) * bobAmount * moveBlend;
-        hips.localPosition = initHipsPos + new Vector3(0f, -bob, 0f);
+        float idleTime = Time.time;
+        float breath = Mathf.Sin(idleTime * breathingSpeed);
+        float slowSway = Mathf.Sin(idleTime * 0.7f);
 
-        // Spine lean into motion
+        // Pelvis bobbing & weight transfer: natural breathing bob + weight shift in idle
+        float moveBob = Mathf.Abs(legSin) * bobAmount * moveBlend;
+        float idleBob = (Mathf.Abs(breath) * 0.016f - 0.008f) * (1f - moveBlend);
+        float idleSwayX = slowSway * 0.014f * (1f - moveBlend);
+        hips.localPosition = initHipsPos + new Vector3(idleSwayX, -moveBob + idleBob, 0f);
+
+        // Hips rotation: subtle weight shift between hips
+        if (moveBlend < 0.95f)
+        {
+            Quaternion idleHipsRot = initHipsRot * Quaternion.Euler(0f, slowSway * 2.5f, slowSway * 2.0f);
+            hips.localRotation = Quaternion.Slerp(initHipsRot, idleHipsRot, 1f - moveBlend);
+        }
+        else
+        {
+            hips.localRotation = initHipsRot;
+        }
+
+        // Spine lean into motion + living idle posture
         if (spine != null)
         {
             float leanAngle = Mathf.Clamp(speed * 2.2f, 0f, 14f) * moveBlend;
-            spine.localRotation = initSpineRot * Quaternion.Euler(leanAngle, 0f, legSin * 2.5f * moveBlend);
+            float moveSpineZ = legSin * 2.5f * moveBlend;
+            float idleSpineX = (1.5f + breath * 1.2f) * (1f - moveBlend);
+            float idleSpineY = (-slowSway * 2.0f) * (1f - moveBlend);
+            float idleSpineZ = (-slowSway * 1.5f) * (1f - moveBlend);
+            spine.localRotation = initSpineRot * Quaternion.Euler(leanAngle + idleSpineX, idleSpineY, moveSpineZ + idleSpineZ);
         }
 
-        // Chest subtle counter-twist
+        // Chest counter-twist + deep warrior chest breathing
         if (chest != null)
         {
-            float breathe = Mathf.Sin(Time.time * breathingSpeed) * 1.5f * (1f - moveBlend);
-            chest.localRotation = initChestRot * Quaternion.Euler(-breathe, legSin * 3f * moveBlend, 0f);
+            float chestBreath = (-3.8f * Mathf.Clamp01(breath * 0.5f + 0.5f)) * (1f - moveBlend);
+            float moveChestZ = legSin * 3f * moveBlend;
+            float idleChestY = (slowSway * 1.5f) * (1f - moveBlend);
+            chest.localRotation = initChestRot * Quaternion.Euler(chestBreath, idleChestY, moveChestZ);
+        }
+
+        // Head looking around & scanning attentiveness
+        if (head != null)
+        {
+            float headScan = Mathf.Sin(idleTime * 0.55f) * 7.5f * (1f - moveBlend);
+            float headPitch = (Mathf.Cos(idleTime * 0.75f) * 2.5f - 1.0f) * (1f - moveBlend);
+            head.localRotation = initHeadRot * Quaternion.Euler(headPitch, headScan, headScan * 0.15f);
         }
 
         bool isMixamo = (hips != null && hips.name.ToLower().Contains("mixamo")) || hasBow;
@@ -557,31 +591,36 @@ public class CharacterVisualAnimator : MonoBehaviour
         }
         else
         {
-            // Upper legs (Thighs)
-            float leftLegAngle = legSin * legAngleRange * moveBlend;
-            float rightLegAngle = -legSin * legAngleRange * moveBlend;
+            // Upper legs (Thighs): Natural grounded warrior stance when idle, stride when moving
+            float idleLeftThigh = (8.0f + slowSway * 1.5f) * (1f - moveBlend);
+            float idleRightThigh = (-4.0f - slowSway * 1.5f) * (1f - moveBlend);
+            float moveLeftThigh = legSin * legAngleRange * moveBlend;
+            float moveRightThigh = -legSin * legAngleRange * moveBlend;
 
             if (leftUpLeg != null)
             {
-                leftUpLeg.localRotation = initLeftUpLegRot * Quaternion.Euler(leftLegAngle, 0f, 0f);
+                leftUpLeg.localRotation = initLeftUpLegRot * Quaternion.Euler(moveLeftThigh + idleLeftThigh, 0f, -3.0f * (1f - moveBlend));
             }
 
             if (rightUpLeg != null)
             {
-                rightUpLeg.localRotation = initRightUpLegRot * Quaternion.Euler(rightLegAngle, 0f, 0f);
+                rightUpLeg.localRotation = initRightUpLegRot * Quaternion.Euler(moveRightThigh + idleRightThigh, 0f, 3.0f * (1f - moveBlend));
             }
 
-            // Lower legs (Knees bend backwards on back swing)
+            // Lower legs (Knees bend backwards on back swing, and relaxed slight bend in idle)
+            float idleLeftKnee = -12.0f * (1f - moveBlend);
+            float idleRightKnee = 5.0f * (1f - moveBlend);
+            float moveLeftKnee = Mathf.Clamp(-legSin * legAngleRange * 1.1f, 0f, 50f) * moveBlend;
+            float moveRightKnee = Mathf.Clamp(legSin * legAngleRange * 1.1f, 0f, 50f) * moveBlend;
+
             if (leftLeg != null)
             {
-                float leftKneeBend = Mathf.Clamp(-legSin * legAngleRange * 1.1f, 0f, 50f) * moveBlend;
-                leftLeg.localRotation = initLeftLegRot * Quaternion.Euler(leftKneeBend, 0f, 0f);
+                leftLeg.localRotation = initLeftLegRot * Quaternion.Euler(moveLeftKnee + idleLeftKnee, 0f, 0f);
             }
 
             if (rightLeg != null)
             {
-                float rightKneeBend = Mathf.Clamp(legSin * legAngleRange * 1.1f, 0f, 50f) * moveBlend;
-                rightLeg.localRotation = initRightLegRot * Quaternion.Euler(rightKneeBend, 0f, 0f);
+                rightLeg.localRotation = initRightLegRot * Quaternion.Euler(moveRightKnee + idleRightKnee, 0f, 0f);
             }
         }
     }
@@ -660,33 +699,57 @@ public class CharacterVisualAnimator : MonoBehaviour
             return;
         }
 
-        // التأرجح الطبيعي لليدين لبقية الأبطال أثناء الجري والوقوف
+        // Preview Showcase flourish gesture every ~8.5 seconds (Ready salute)
+        float flourishLift = 0f;
+        if (isPreviewShowcase)
+        {
+            float fCycle = Time.time % 8.5f;
+            if (fCycle < 1.4f)
+            {
+                flourishLift = Mathf.Sin((fCycle / 1.4f) * Mathf.PI) * 22f;
+            }
+        }
+
+        float idleTimeNow = Time.time;
+        float breathSine = Mathf.Sin(idleTimeNow * breathingSpeed);
         float stdArmSin = Mathf.Sin(walkCycle);
 
+        // Left Arm: Defensive Guard & Shield Posture when idle, walking swing when moving
         if (leftArm != null)
         {
-            float leftArmSwing = -stdArmSin * armAngleRange * moveBlend;
-            float idleBreath = Mathf.Sin(Time.time * breathingSpeed + 0.5f) * 2f * (1f - moveBlend);
-            leftArm.localRotation = initLeftArmRot * Quaternion.Euler(leftArmSwing + idleBreath, 0f, 3f);
+            Quaternion idleLeftArm = initLeftArmRot * Quaternion.Euler(56f + breathSine * 2.2f, -18f, 28f);
+            Quaternion moveLeftArm = initLeftArmRot * Quaternion.Euler(-stdArmSin * armAngleRange, 0f, 3f);
+            Quaternion targetLeft = Quaternion.Slerp(idleLeftArm, moveLeftArm, moveBlend);
+            leftArm.localRotation = Quaternion.Slerp(leftArm.localRotation, targetLeft, Time.deltaTime * 10f);
         }
 
-        if (rightArm != null)
-        {
-            float rightArmSwing = stdArmSin * armAngleRange * moveBlend;
-            float idleBreath = Mathf.Sin(Time.time * breathingSpeed) * 2f * (1f - moveBlend);
-            rightArm.localRotation = initRightArmRot * Quaternion.Euler(rightArmSwing + idleBreath, 0f, -3f);
-        }
-
+        // Left ForeArm: Bent in sturdy guard posture when idle
         if (leftForeArm != null)
         {
-            float bend = Mathf.Clamp(stdArmSin * 15f, 0f, 25f) * moveBlend;
-            leftForeArm.localRotation = initLeftForeArmRot * Quaternion.Euler(-12f - bend, 0f, 0f);
+            Quaternion idleLeftFore = initLeftForeArmRot * Quaternion.Euler(-55f + breathSine * 1.5f, 0f, 16f);
+            float runBend = Mathf.Clamp(stdArmSin * 15f, 0f, 25f);
+            Quaternion moveLeftFore = initLeftForeArmRot * Quaternion.Euler(-12f - runBend, 0f, 0f);
+            Quaternion targetFore = Quaternion.Slerp(idleLeftFore, moveLeftFore, moveBlend);
+            leftForeArm.localRotation = Quaternion.Slerp(leftForeArm.localRotation, targetFore, Time.deltaTime * 10f);
         }
 
+        // Right Arm: Weapon Ready guard + subtle challenge flourish when idle
+        if (rightArm != null)
+        {
+            Quaternion idleRightArm = initRightArmRot * Quaternion.Euler(50f + breathSine * 2.2f - flourishLift, 16f, -22f);
+            Quaternion moveRightArm = initRightArmRot * Quaternion.Euler(stdArmSin * armAngleRange, 0f, -3f);
+            Quaternion targetRight = Quaternion.Slerp(idleRightArm, moveRightArm, moveBlend);
+            rightArm.localRotation = Quaternion.Slerp(rightArm.localRotation, targetRight, Time.deltaTime * 10f);
+        }
+
+        // Right ForeArm: Forearm angled ready to strike when idle
         if (rightForeArm != null)
         {
-            float bend = Mathf.Clamp(-stdArmSin * 15f, 0f, 25f) * moveBlend;
-            rightForeArm.localRotation = initRightForeArmRot * Quaternion.Euler(-12f - bend, 0f, 0f);
+            Quaternion idleRightFore = initRightForeArmRot * Quaternion.Euler(-50f + breathSine * 1.5f - flourishLift * 0.4f, 0f, -12f);
+            float runBend = Mathf.Clamp(-stdArmSin * 15f, 0f, 25f);
+            Quaternion moveRightFore = initRightForeArmRot * Quaternion.Euler(-12f - runBend, 0f, 0f);
+            Quaternion targetRightFore = Quaternion.Slerp(idleRightFore, moveRightFore, moveBlend);
+            rightForeArm.localRotation = Quaternion.Slerp(rightForeArm.localRotation, targetRightFore, Time.deltaTime * 10f);
         }
     }
 
