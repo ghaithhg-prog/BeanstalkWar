@@ -25,6 +25,7 @@ public class LevelBossManager : MonoBehaviour
     public const int TotalBossCount = 3;
     public int DefeatedBossCount => defeatedBossLevels.Count;
     public bool AreAllBossesDefeated => DefeatedBossCount >= TotalBossCount;
+    public bool IsBossLevelDefeated(int level) => defeatedBossLevels.Contains(level);
 
     public static event System.Action<string, string, PlayerMovement.TeamType, int> OnSingleBossDefeated;
     public static event System.Action OnAllThreeBossesDefeated;
@@ -250,10 +251,13 @@ public class LevelBossManager : MonoBehaviour
 
         if (targetBoss != null)
         {
-            targetBoss.gameObject.SetActive(true);
-            targetBoss.AwakenBossNow(spawnPos);
+            if (!targetBoss.isDefeated && !defeatedBossLevels.Contains(level))
+            {
+                targetBoss.gameObject.SetActive(true);
+                targetBoss.AwakenBossNow(spawnPos);
+            }
         }
-        else
+        else if (!defeatedBossLevels.Contains(level))
         {
             for (int i = 0; i < tiers.Length; i++)
             {
@@ -411,7 +415,21 @@ public class LevelBossManager : MonoBehaviour
 
     void CheckBossesDefeatStatus()
     {
-        if (!bossesSpawned || allThreeBossesTriggered) return;
+        if (allThreeBossesTriggered) return;
+
+        // فحص تلقائي ذكي وشامل لأي زعماء في المشهد تمت هزيمتهم لضمان عدم ضياع أي هزيمة
+        LevelBoss[] sceneBosses = FindObjectsByType<LevelBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (var b in sceneBosses)
+        {
+            if (b != null && (b.isDefeated || (b.GetComponent<Health>() != null && b.GetComponent<Health>().isDead)))
+            {
+                if (!defeatedBossLevels.Contains(b.levelNumber))
+                {
+                    Debug.Log($"🛡️ [LevelBossManager] Auto-registering defeated boss for level {b.levelNumber} ({b.bossTitle})");
+                    defeatedBossLevels.Add(b.levelNumber);
+                }
+            }
+        }
 
         // فك حماية الكريستال والشجرة يحدث حصراً وفقط عندما يُهزم الزعماء الثلاثة جميعهم!
         if (AreAllBossesDefeated && !allThreeBossesTriggered)
@@ -460,9 +478,17 @@ public class LevelBossManager : MonoBehaviour
                 }
                 else
                 {
-                    b.gameObject.SetActive(true);
-                    Vector3 pPos = pltTr != null ? pltTr.position : b.transform.position;
-                    b.AwakenBossNow(pPos);
+                    // حماية صارمة: لا توقظ الزعيم أبداً إذا كان مهزوماً أو ميتاً أو مسجلاً كهزيمة!
+                    if (!b.isDefeated && !defeatedBossLevels.Contains(lvl))
+                    {
+                        Health bh = b.GetComponent<Health>();
+                        if (bh == null || !bh.isDead)
+                        {
+                            b.gameObject.SetActive(true);
+                            Vector3 pPos = pltTr != null ? pltTr.position : b.transform.position;
+                            b.AwakenBossNow(pPos);
+                        }
+                    }
                 }
 
                 // مطابقة وإعداد بيانات الزعيم مرة واحدة فقط لكل مجسم فريد لمنع استنزاف الذاكرة

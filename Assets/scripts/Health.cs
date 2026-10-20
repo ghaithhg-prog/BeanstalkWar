@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections;
 using TMPro;
 
@@ -125,6 +125,16 @@ public class Health : MonoBehaviour
         LevelBoss boss = GetComponent<LevelBoss>();
         if (boss != null)
         {
+            CharacterCombat bCombat = GetComponent<CharacterCombat>();
+            if (bCombat != null) bCombat.enabled = false;
+
+            UnityEngine.AI.NavMeshAgent bAgent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (bAgent != null)
+            {
+                if (bAgent.isOnNavMesh) bAgent.isStopped = true;
+                bAgent.enabled = false;
+            }
+
             boss.OnBossDefeated();
             return;
         }

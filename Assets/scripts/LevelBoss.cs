@@ -29,7 +29,7 @@ public class LevelBoss : NetworkBehaviour
     private CharacterCombat combat;
     private NavMeshAgent agent;
     private Light bossLight;
-    private bool isDefeated = false;
+    public bool isDefeated = false;
     private Vector3 guardCenter;
     private bool isAwaitingLevelUnlock = false;
     private GameObject myPlatformObject = null;
@@ -433,6 +433,11 @@ public class LevelBoss : NetworkBehaviour
     /// <summary>إيقاظ فوري ومباشر للزعيم عند فتح مستواه من قبل TreeLevelManager</summary>
     public void AwakenBossNow(Vector3 platformPos)
     {
+        // حماية صارمة: لا توقظ زعيماً هُزم أو مات أو مسجل كهزيمة في LevelBossManager أبداً!
+        if (isDefeated) return;
+        if (health != null && health.isDead) return;
+        if (LevelBossManager.Instance != null && LevelBossManager.Instance.IsBossLevelDefeated(levelNumber)) return;
+
         gameObject.SetActive(true);
         isAwaitingLevelUnlock = false;
         float y = GetExpectedLevelY();
@@ -698,6 +703,7 @@ public class LevelBoss : NetworkBehaviour
     {
         if (isDefeated) return;
         isDefeated = true;
+        if (health != null) health.isDead = true;
 
         GameObject killer = health != null ? health.lastAttacker : null;
         string killerName = killer != null ? killer.name : "A Brave Champion";
@@ -721,56 +727,207 @@ public class LevelBoss : NetworkBehaviour
 
         Debug.Log($"👑 BOSS SLAIN! {bossTitle} (Level {levelNumber}) was defeated by {killerName} ({killerTeam})!");
 
-        // منح المكافآت الضخمة للاعب القاتل
-        if (PlayerProfile.Instance != null)
+        // 1. تسجيل هزيمة الزعيم في مدير الزعماء فوراً كأولوية قصوى مطلقة لضمان فك الأختام والكريستالة
+        try
         {
-            PlayerProfile.Instance.RegisterBossKill(bossTitle, coinReward, xpReward, killer);
+            if (LevelBossManager.Instance != null)
+            {
+                LevelBossManager.Instance.RegisterBossDefeated(levelNumber, bossTitle, killerName, killerTeam);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[LevelBoss] Error in RegisterBossDefeated: {ex}");
         }
 
-        if (killer != null && MatchEndStatsUI.Instance != null)
+        // 2. منح المكافآت للاعب القاتل وتحديث الإحصائيات بأمان تام
+        try
         {
-            MatchEndStatsUI.Instance.RegisterBossKill(killer);
+            if (PlayerProfile.Instance != null)
+            {
+                PlayerProfile.Instance.RegisterBossKill(bossTitle, coinReward, xpReward, killer);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[LevelBoss] Error in PlayerProfile.RegisterBossKill: {ex}");
         }
 
-        // تحديث عداد الأختام الثلاثة مباشرة ومضموناً على المضيف/السيرفر
-        if (LevelBossManager.Instance != null)
+        try
         {
-            LevelBossManager.Instance.RegisterBossDefeated(levelNumber, bossTitle, killerName, killerTeam);
+            if (killer != null && MatchEndStatsUI.Instance != null)
+            {
+                MatchEndStatsUI.Instance.RegisterBossKill(killer);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[LevelBoss] Error in MatchEndStatsUI.RegisterBossKill: {ex}");
         }
 
-        // إشعار العملاء المتصلين عبر الشبكة إن كان الكائن منشوراً على الشبكة
-        if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        // 3. إشعار الشبكة والعملاء المتصلين
+        try
         {
-            AnnounceBossDeathRpc(levelNumber, bossTitle, killerName, (int)killerTeam, coinReward, xpReward);
+            if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                AnnounceBossDeathRpc(levelNumber, bossTitle, killerName, (int)killerTeam, coinReward, xpReward);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[LevelBoss] Error in AnnounceBossDeathRpc: {ex}");
         }
 
-        // إنشاء ضريح الغنائم (Boss Tombstone / Spoils Chest) في موقع موت الزعيم ليجمعه الفريق الفائز
-        GameObject tombstoneObj = new GameObject($"Tombstone_{bossTitle}");
-        tombstoneObj.transform.position = transform.position;
-        BossTombstone tombstone = tombstoneObj.AddComponent<BossTombstone>();
-        tombstone.Setup(bossTitle, killerTeam, killerName, coinReward, xpReward);
-
-        // اختفاء وتلاشي الزعيم فوراً
-        StartCoroutine(BossDeathVanishRoutine());
+        // 4. إطلاق مشهد موت وسقوط الزعيم السينمائي المهيب (يسقط أرضاً أولاً ثم يظهر القبر)
+        StartCoroutine(BossDeathSequenceRoutine(bossTitle, killerTeam, killerName, coinReward, xpReward));
     }
 
-    IEnumerator BossDeathVanishRoutine()
+    /// <summary>
+    /// تسلسل سينمائي متكامل لموت الزعيم:
+    /// 1. شل الحركة والقتال فوراً
+    /// 2. تهاوي وسقوط الزعيم ببطء وواقعية للخلف نحو الأرض (Dramatic Collapse)
+    /// 3. ارتطام بالأرض وهزة كاميرا وموجة صدمة ذهبية/نارية
+    /// 4. البقاء ممدداً على الأرض لمدة 2.5 ثانية ليشاهد الجميع جثة الزعيم الساقطة
+    /// 5. ظهور ضريح الغنائم (Tombstone) وتلاشي الجثة بسلام
+    /// </summary>
+    IEnumerator BossDeathSequenceRoutine(string title, PlayerMovement.TeamType team, string killer, int coins, int xp)
     {
-        if (agent != null && agent.isOnNavMesh) agent.isStopped = true;
+        // 1. شل حركة وقتال الزعيم وتعطيل كوليدرات الهجوم فوراً
+        if (agent != null)
+        {
+            if (agent.isOnNavMesh) agent.isStopped = true;
+            agent.enabled = false;
+        }
+        if (combat != null) combat.enabled = false;
+
         Collider[] cols = GetComponentsInChildren<Collider>();
         foreach (var c in cols) c.enabled = false;
 
-        float timer = 0.5f;
-        Vector3 origScale = transform.localScale;
-        while (timer > 0f)
+        Transform crown = transform.Find("BossAuraCrown");
+        if (crown != null)
         {
-            float ratio = timer / 0.5f;
+            crown.gameObject.SetActive(false);
+        }
+
+        // 2. تهاوي الزعيم وسقوطه على ظهره فوق سطح المنصة
+        Transform meshTr = transform.Find("Character_3D_Mesh");
+        if (meshTr == null) meshTr = transform.Find("Model");
+
+        CharacterVisualAnimator visualAnim = meshTr != null ? meshTr.GetComponent<CharacterVisualAnimator>() : null;
+        if (visualAnim != null && visualAnim.UsesRealDeathAnimation)
+        {
+            visualAnim.TriggerDeathAnimation();
+        }
+
+        Quaternion startRot = meshTr != null ? meshTr.localRotation : Quaternion.identity;
+        Quaternion targetRot = Quaternion.Euler(-85f, 0f, 0f);
+        Vector3 startLocalPos = meshTr != null ? meshTr.localPosition : Vector3.zero;
+        Vector3 targetLocalPos = new Vector3(startLocalPos.x, -0.6f, startLocalPos.z);
+
+        float fallDuration = 0.85f;
+        float fallTimer = 0f;
+
+        while (fallTimer < fallDuration)
+        {
+            fallTimer += Time.deltaTime;
+            float t = Mathf.Clamp01(fallTimer / fallDuration);
+            // حركة سقوط متسارعة بفعل الجاذبية (Ease In)
+            float easeT = t * t;
+
+            if (meshTr != null)
+            {
+                meshTr.localRotation = Quaternion.Slerp(startRot, targetRot, easeT);
+                meshTr.localPosition = Vector3.Lerp(startLocalPos, targetLocalPos, easeT);
+            }
+
+            if (bossLight != null)
+            {
+                bossLight.intensity = Mathf.Lerp(4.5f, 1.2f, t);
+            }
+
+            yield return null;
+        }
+
+        if (meshTr != null)
+        {
+            meshTr.localRotation = targetRot;
+            meshTr.localPosition = targetLocalPos;
+        }
+
+        // 3. ارتطام هائل بالأرض مع هزة كاميرا وموجة صدمة أرضية
+        CreateDeathImpactShockwave(transform.position);
+
+        // 4. البقاء ممدداً على الأرض لمدة ثانيتين ونصف (2.5 ثانية) كما طلب المستخدم تماماً
+        yield return new WaitForSeconds(2.5f);
+
+        // 5. ظهور ضريح الغنائم (Boss Tombstone) في موقع موت وسقوط الزعيم
+        Vector3 tombstonePos = transform.position;
+        GameObject tombstoneObj = new GameObject($"Tombstone_{title}");
+        tombstoneObj.transform.position = tombstonePos;
+        BossTombstone tombstone = tombstoneObj.AddComponent<BossTombstone>();
+        tombstone.Setup(title, team, killer, coins, xp);
+
+        // 6. تلاشي مجسم الزعيم بهدوء وصعود طاقته للسماء
+        float fadeTimer = 0.5f;
+        Vector3 origScale = transform.localScale;
+        while (fadeTimer > 0f)
+        {
+            fadeTimer -= Time.deltaTime;
+            float ratio = Mathf.Clamp01(fadeTimer / 0.5f);
             transform.localScale = origScale * ratio;
-            timer -= Time.deltaTime;
             yield return null;
         }
 
         Destroy(gameObject);
+    }
+
+    void CreateDeathImpactShockwave(Vector3 groundPos)
+    {
+        // هزة كاميرا حماسية عند ارتطام الزعيم بالأرض
+        ThirdPersonCamera.Shake(0.55f, 0.4f);
+
+        GameObject shockObj = new GameObject("BossDeathShockwave");
+        shockObj.transform.position = groundPos + Vector3.up * 0.15f;
+        StartCoroutine(AnimateShockwaveRoutine(shockObj));
+    }
+
+    IEnumerator AnimateShockwaveRoutine(GameObject shockObj)
+    {
+        GameObject ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        ring.transform.SetParent(shockObj.transform);
+        ring.transform.localPosition = Vector3.zero;
+        ring.transform.localScale = new Vector3(1f, 0.04f, 1f);
+
+        Collider c = ring.GetComponent<Collider>();
+        if (c != null) Destroy(c);
+
+        Renderer rend = ring.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            rend.material.color = bossColor;
+            rend.material.EnableKeyword("_EMISSION");
+            rend.material.SetColor("_EmissionColor", auraColor * 2.5f);
+        }
+
+        float dur = 0.65f;
+        float elapsed = 0f;
+        Vector3 maxScale = new Vector3(9.5f, 0.04f, 9.5f);
+
+        while (elapsed < dur)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / dur;
+            ring.transform.localScale = Vector3.Lerp(new Vector3(1f, 0.04f, 1f), maxScale, t);
+            if (rend != null)
+            {
+                Color clr = bossColor;
+                clr.a = 1f - t;
+                rend.material.color = clr;
+            }
+            yield return null;
+        }
+
+        Destroy(shockObj);
     }
 
     [Rpc(SendTo.ClientsAndHost)]
@@ -783,6 +940,13 @@ public class LevelBoss : NetworkBehaviour
         if (LevelBossManager.Instance != null)
         {
             LevelBossManager.Instance.RegisterBossDefeated(bossLevel, title, killer, kTeam);
+        }
+
+        if (!isDefeated)
+        {
+            isDefeated = true;
+            if (health != null) health.isDead = true;
+            StartCoroutine(BossDeathSequenceRoutine(title, kTeam, killer, coins, xp));
         }
     }
 
