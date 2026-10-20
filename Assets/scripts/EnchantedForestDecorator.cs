@@ -1994,7 +1994,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             GameObject coreSeg = CreateSolidCoreSegment(trunkRoot.transform, p0, p1, coreThickness, coreMat, $"TrunkSolidCore_{s}");
             if (coreSeg != null)
             {
-                growth.RegisterSegment(coreSeg, Mathf.Min(p0.y, p1.y), Mathf.Max(p0.y, p1.y));
+                growth.RegisterExtrudingSegment(coreSeg, p0, p1);
             }
 
             // Solid knuckle joint at each core node
@@ -2011,7 +2011,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             {
                 joint.AddComponent<TreeDamageForwarder>();
             }
-            growth.RegisterElement(joint, p1.y);
+            growth.RegisterNodeJoint(joint, p1, p1.y);
         }
 
         // 2. 6 BRAIDED HELICAL VINE COLUMNS FUSED TIGHTLY INTO THE CORE (تضفيرات أسطورية مدمجة تشكل حفر وأخاديد طبيعية)
@@ -2049,14 +2049,14 @@ public class EnchantedForestDecorator : MonoBehaviour
                     GameObject vSeg = CreateBranchSegment(trunkRoot.transform, prevP, p, thickness, vineColMat, $"TrunkBraid_V{v}_S{s}");
                     if (vSeg != null)
                     {
-                        growth.RegisterSegment(vSeg, Mathf.Min(prevP.y, p.y), Mathf.Max(prevP.y, p.y));
+                        growth.RegisterExtrudingSegment(vSeg, prevP, p);
                     }
                 }
 
                 GameObject vJoint = CreateBranchJoint(trunkRoot.transform, p, thickness * 1.12f, vineColMat, $"TrunkJoint_V{v}_S{s}");
                 if (vJoint != null)
                 {
-                    growth.RegisterElement(vJoint, p.y);
+                    growth.RegisterNodeJoint(vJoint, p, p.y);
                 }
             }
         }
@@ -2084,7 +2084,7 @@ public class EnchantedForestDecorator : MonoBehaviour
                 leaf.transform.localRotation = Quaternion.Euler(Random.Range(-25f, 25f), Random.Range(0f, 360f), Random.Range(-25f, 25f));
                 leaf.GetComponent<Renderer>().material = (l % 2 == 0) ? brightCanopyMaterial : lushCanopyMaterial;
                 DestroyCollider(leaf);
-                growth.RegisterElement(leaf, iy);
+                growth.RegisterFoliage(leaf, iy);
             }
 
             // Moss shelf puffs every few nodes
@@ -2097,7 +2097,7 @@ public class EnchantedForestDecorator : MonoBehaviour
                 moss.transform.localScale = new Vector3(1.1f, 0.45f, 1.1f);
                 moss.GetComponent<Renderer>().material = lushCanopyMaterial;
                 DestroyCollider(moss);
-                growth.RegisterElement(moss, iy);
+                growth.RegisterFoliage(moss, iy);
             }
         }
 
@@ -2119,7 +2119,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             hollowCave.transform.localScale = new Vector3(1.6f, 2.2f, 1.6f);
             hollowCave.GetComponent<Renderer>().material = darkBarkMaterial;
             DestroyCollider(hollowCave);
-            growth.RegisterElement(hollowCave, hy);
+            growth.RegisterFoliage(hollowCave, hy);
 
             // Glowing magical spirit wisp tucked inside the hollow
             GameObject wisp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -2129,7 +2129,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             wisp.transform.localScale = Vector3.one * 0.45f;
             wisp.GetComponent<Renderer>().material = hollowGlowMaterial;
             DestroyCollider(wisp);
-            growth.RegisterElement(wisp, hy);
+            growth.RegisterFoliage(wisp, hy);
 
             // Subtle gentle point light inside the hollow
             GameObject wispLightObj = new GameObject($"HollowLight_{h}");
@@ -2159,8 +2159,8 @@ public class EnchantedForestDecorator : MonoBehaviour
             Material petMat = trunkEmeraldSproutVineMat ?? barkMaterial;
             GameObject pet1 = CreateBranchSegment(trunkRoot.transform, stemStart, stemMid, 0.38f, petMat, $"LeafPetiole_{l}_1");
             GameObject pet2 = CreateBranchSegment(trunkRoot.transform, stemMid, stemEnd, 0.26f, petMat, $"LeafPetiole_{l}_2");
-            if (pet1 != null) growth.RegisterSegment(pet1, stemStart.y, stemMid.y);
-            if (pet2 != null) growth.RegisterSegment(pet2, stemMid.y, stemEnd.y);
+            if (pet1 != null) growth.RegisterExtrudingSegment(pet1, stemStart, stemMid);
+            if (pet2 != null) growth.RegisterExtrudingSegment(pet2, stemMid, stemEnd);
 
             // Broad heart-shaped beanstalk leaf blade
             GameObject leafBlade = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -2171,7 +2171,7 @@ public class EnchantedForestDecorator : MonoBehaviour
             leafBlade.transform.localRotation = Quaternion.LookRotation(stemDir) * Quaternion.Euler(15f, 0f, (l % 2 == 0 ? 12f : -12f));
             leafBlade.GetComponent<Renderer>().material = brightCanopyMaterial;
             DestroyCollider(leafBlade);
-            growth.RegisterElement(leafBlade, ly);
+            growth.RegisterFoliage(leafBlade, ly);
         }
 
         // 6. GRAND BLOOMING CELESTIAL FLOWER & SACRED CRYSTAL CRADLE AT TOP LEVEL
