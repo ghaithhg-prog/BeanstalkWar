@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Unity.Netcode;
 using UnityEngine.AI;
 
@@ -616,9 +616,17 @@ public class BotController : NetworkBehaviour
             if (character == null || character.gameObject == gameObject) continue;
             if (character.team == team) continue;
 
-            // لا نستهدف زعيماً نائماً لم يُفتح طابقه بعد
+            // لا نستهدف زعيماً نائماً لم يُفتح طابقه بعد، ولا زعيماً في مستوى أعلى من المستوى الأدنى الحي
             LevelBoss bossComp = character.GetComponent<LevelBoss>();
-            if (bossComp != null && !bossComp.IsAwakenedAndAlive) continue;
+            if (bossComp != null)
+            {
+                if (!bossComp.IsAwakenedAndAlive) continue;
+                LevelBoss lowestActiveBoss = LevelBossManager.Instance != null ? LevelBossManager.Instance.GetActiveAwakenedBoss() : null;
+                if (lowestActiveBoss != null && bossComp.levelNumber > lowestActiveBoss.levelNumber)
+                {
+                    continue; // البقاء في قتال الزعيم الأدنى حتى يموت قبل الانتقال للزعيم الأعلى
+                }
+            }
 
             Health health = character.GetComponent<Health>();
             if (health == null || health.isDead) continue;

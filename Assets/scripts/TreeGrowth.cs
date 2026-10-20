@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 
 public class TreeGrowth : MonoBehaviour
@@ -499,7 +499,7 @@ public class TreeGrowth : MonoBehaviour
         // حماية قاطعة: لا تسقط الشجرة أبداً إلا بعد موت الزعماء الثلاثة
         if (LevelBossManager.Instance != null && !LevelBossManager.Instance.AreAllBossesDefeated)
         {
-            currentHealth = maxHealth * 0.30f;
+            currentHealth = maxHealth * 0.25f;
             isCritical = false;
             return;
         }
@@ -713,9 +713,9 @@ public class TreeGrowth : MonoBehaviour
 
         currentHealth -= amount;
 
-        // درع الأختام الثلاثة والعد التنازلي لـ 10 ثوانٍ: لا يمكن إسقاط الشجرة أو إنزال صحتها تحت 30% طالما الدرع فعال!
+        // درع الأختام الثلاثة والعد التنازلي لـ 10 ثوانٍ: لا يمكن إسقاط الشجرة أو إنزال صحتها تحت 25% طالما الدرع فعال!
         bool shieldActive = IsShieldActive;
-        float minAllowedHealth = shieldActive ? (maxHealth * 0.30f) : 0f;
+        float minAllowedHealth = shieldActive ? (maxHealth * 0.25f) : 0f;
 
         currentHealth = Mathf.Clamp(currentHealth, minAllowedHealth, maxHealth);
     }
@@ -747,9 +747,9 @@ public class TreeGrowth : MonoBehaviour
             float healthPercent = currentHealth / maxHealth;
             healthBarFill.fillAmount = healthPercent;
             bool shieldActive = IsShieldActive;
-            if (shieldActive && healthPercent <= 0.31f)
+            if (shieldActive && healthPercent <= 0.26f)
             {
-                // لون ذهبي متوهج يدل على أن درع الزعماء الثلاثة يحمي الشجرة من السقوط (صامدة عند 30%)
+                // لون ذهبي متوهج يدل على أن درع الزعماء الثلاثة يحمي الشجرة من السقوط (صامدة عند 25%)
                 healthBarFill.color = new Color(1f, 0.82f, 0.2f);
             }
             else
@@ -871,7 +871,7 @@ public class TreeGrowth : MonoBehaviour
 
         GUIStyle shieldStyle = new GUIStyle(GUI.skin.label);
         shieldStyle.alignment = TextAnchor.MiddleCenter;
-        shieldStyle.fontSize = 10;
+        shieldStyle.fontSize = 12;
         shieldStyle.fontStyle = FontStyle.Bold;
         shieldStyle.normal.textColor = shieldColor;
 

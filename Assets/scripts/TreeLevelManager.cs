@@ -38,6 +38,27 @@ public class TreeLevelManager : MonoBehaviour
             }
         }
 
+        // تأمين إضافي عبر البحث المباشر بالاسم لضمان إغلاق المنصات العليا حتى نمو الشجرة إليها
+        GameObject treeLevelsParent = GameObject.Find("TreeLevels");
+        if (treeLevelsParent != null)
+        {
+            Transform l2 = treeLevelsParent.transform.Find("Level_2");
+            if (l2 != null) l2.gameObject.SetActive(false);
+            Transform l3 = treeLevelsParent.transform.Find("Level_3");
+            if (l3 != null) l3.gameObject.SetActive(false);
+            Transform top = treeLevelsParent.transform.Find("TopLevel");
+            if (top != null) top.gameObject.SetActive(false);
+        }
+        else
+        {
+            GameObject l2 = GameObject.Find("Level_2");
+            if (l2 != null) l2.SetActive(false);
+            GameObject l3 = GameObject.Find("Level_3");
+            if (l3 != null) l3.SetActive(false);
+            GameObject top = GameObject.Find("TopLevel");
+            if (top != null) top.SetActive(false);
+        }
+
         // تأمين إخفاء ممرات الصعود فوراً في Awake
         if (spiralConnector != null)
         {

@@ -203,21 +203,35 @@ public class EnchantedForestDecorator : MonoBehaviour
             localPlayer.RequestTeam(MatchEndStatsUI.savedTeam);
             localPlayer.team = MatchEndStatsUI.savedTeam;
 
+            // تحديد موقع تفريخ اللاعب البشري بدقة في النقطة 0 لمنع التداخل مع أي بوت
+            if (SpawnManager.Instance != null)
+            {
+                Vector3 spawnPos = SpawnManager.Instance.GetSpawnPosition(MatchEndStatsUI.savedTeam, 0);
+                localPlayer.transform.position = spawnPos + Vector3.up * 0.5f;
+                Transform sp = SpawnManager.Instance.GetSpawnPoint(MatchEndStatsUI.savedTeam);
+                if (sp != null) localPlayer.transform.rotation = sp.rotation;
+                Rigidbody prb = localPlayer.GetComponent<Rigidbody>();
+                if (prb != null)
+                {
+                    prb.linearVelocity = Vector3.zero;
+                    prb.angularVelocity = Vector3.zero;
+                }
+            }
+
             // تطبيق الشخصية المحفوظة (مع السكن المحفوظ تلقائياً)
             localPlayer.RequestCharacter(MatchEndStatsUI.savedCharacterID);
             localPlayer.ApplyCharacter(MatchEndStatsUI.savedCharacterID);
 
-            // إنشاء فرق البوتات 5v5 بتوزيع متباعد على شبكة الملاحة الجاهزة
-            if (BotManager.Instance != null)
-            {
-                BotManager.Instance.CreateOfflineBots(localPlayer);
-            }
-
-            // تفعيل العد التنازلي 3.. 2.. 1.. GO!
+            // تصفير حالة المباراة أولاً قبل بدء تفريخ البوتات
             if (GameStateManager.Instance != null)
             {
                 GameStateManager.Instance.ResetStateForNewMatch();
-                GameStateManager.Instance.RequestStartGame();
+            }
+
+            // إنشاء فرق البوتات 5v5 بتوزيع متباعد على شبكة الملاحة الجاهزة وإطلاق العد التنازلي التلقائي
+            if (BotManager.Instance != null)
+            {
+                BotManager.Instance.CreateOfflineBots(localPlayer);
             }
         }
         else

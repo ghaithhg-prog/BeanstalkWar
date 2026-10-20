@@ -569,6 +569,19 @@ public class LevelBoss : NetworkBehaviour
 
         if (isDormant) return;
 
+        // حماية قطعية: تثبيت ارتفاع الزعيم على طابقه المخصص بدقة لمنع أي سقوط لطابق أدنى
+        float expectedY = GetExpectedLevelY();
+        if (Mathf.Abs(transform.position.y - expectedY) > 0.8f)
+        {
+            Vector3 fixedPos = transform.position;
+            fixedPos.y = expectedY;
+            transform.position = fixedPos;
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
+            {
+                agent.Warp(fixedPos);
+            }
+        }
+
         // دوران ونبض تاج وهالة الزعيم
         Transform crown = transform.Find("BossAuraCrown");
         if (crown != null)

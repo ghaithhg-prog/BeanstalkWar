@@ -470,8 +470,8 @@ public class LevelBossManager : MonoBehaviour
                     if (pObj != null) pltTr = pObj.transform;
                 }
 
-                bool platformActive = (lvl == 1) || (pltTr != null && pltTr.gameObject.activeInHierarchy);
-                if (!platformActive)
+                // حماية قاطعة: الزعيم للمستوى 2 والمستوى 3 يجب أن يبدأ خاملاً ومخفياً حتى يفتح مستواه عبر نمو الشجرة
+                if (lvl > 1)
                 {
                     b.gameObject.SetActive(false);
                     b.CheckPlatformReadiness();

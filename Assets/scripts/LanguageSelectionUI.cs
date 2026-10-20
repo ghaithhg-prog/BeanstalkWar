@@ -626,6 +626,15 @@ public class LanguageSelectionUI : MonoBehaviour
                 break;
             }
         }
+
+        if (PlayerPrefs.GetInt("LanguagePromptSeen", 0) == 1)
+        {
+            showLanguageModal = false;
+        }
+        else
+        {
+            showLanguageModal = true;
+        }
     }
 
     void OnDestroy()
@@ -679,10 +688,10 @@ public class LanguageSelectionUI : MonoBehaviour
 
     private void DrawLanguageCornerButton()
     {
-        float btnW = 165f;
-        float btnH = 34f;
-        float x = Screen.width - btnW - 190f; // Sits neatly to the left of the Guide button
-        float y = 14f;
+        float btnW = 46f;
+        float btnH = 28f;
+        float x = Screen.width - 84f - btnW - 8f; // Sits neatly to the left of the Guide button
+        float y = 12f;
 
         LanguageOption current = AvailableLanguages[Mathf.Clamp(selectedIndex, 0, AvailableLanguages.Length - 1)];
 
@@ -692,21 +701,14 @@ public class LanguageSelectionUI : MonoBehaviour
             showLanguageModal = true;
         }
 
-        // Draw national flag badge inside button
+        // Draw national flag badge centered inside compact button
         Texture2D flag = GetFlagTexture(current.code);
         if (flag != null)
         {
-            GUI.DrawTexture(new Rect(x + 10f, y + 6f, 32f, 22f), flag);
+            float flagW = 30f;
+            float flagH = 20f;
+            GUI.DrawTexture(new Rect(x + (btnW - flagW) / 2f, y + (btnH - flagH) / 2f, flagW, flagH), flag);
         }
-
-        GUIStyle labelStyle = new GUIStyle(GUI.skin.label);
-        labelStyle.fontSize = 12;
-        labelStyle.fontStyle = FontStyle.Bold;
-        labelStyle.alignment = TextAnchor.MiddleLeft;
-        labelStyle.normal.textColor = Color.white;
-
-        string displayCode = current.code.ToUpperInvariant();
-        GUI.Label(new Rect(x + 48f, y + 6f, btnW - 52f, 22f), $"{current.englishName} ({displayCode}) 🌐", labelStyle);
     }
 
     private void DrawLanguageSelectionModal()

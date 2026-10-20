@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Unity.Netcode;
 
 /// <summary>
@@ -243,11 +243,8 @@ public class GameIntroBriefingUI : MonoBehaviour
 
         bool isPlaying = GameStateManager.Instance != null && GameStateManager.Instance.IsPlaying();
 
-        // During gameplay, show the 3-Boss Seal Status Bar near the top
-        if (isPlaying)
-        {
-            DrawBossSealsStatusHUD();
-        }
+        // During gameplay, Boss Seal & Shield status is rendered clearly in TreeGrowth directly under health bar.
+        // Duplicate black box (DrawBossSealsStatusHUD) is removed as requested by user to keep the view clean.
 
         // Draw Giant Center-Screen Boss / Ultimate Objective Announcement Banner
         if (bigBannerTimer > 0f)
@@ -258,14 +255,14 @@ public class GameIntroBriefingUI : MonoBehaviour
 
     private void DrawHowToPlayToggleButton()
     {
-        float btnW = 175f;
-        float btnH = 34f;
-        float x = Screen.width - btnW - 16f;
-        float y = 14f;
+        float btnW = 76f;
+        float btnH = 28f;
+        float x = Screen.width - btnW - 8f;
+        float y = 12f;
 
         string btnLabel = showBriefingModal
-            ? LanguageSelectionUI.Localize("❌ Close Guide (H)", ar: "❌ إغلاق الدليل (H)", ru: "❌ Закрыть (H)", es: "❌ Cerrar Guía (H)", fr: "❌ Fermer (H)")
-            : LanguageSelectionUI.Localize("📖 Guide & Videos (H/V)", ar: "📖 الدليل والفيديوهات (H/V)", ru: "📖 Обучение и Видео (H/V)", es: "📖 Guía y Videos (H/V)", fr: "📖 Guide & Vidéos (H/V)");
+            ? "❌"
+            : LanguageSelectionUI.Localize("📖 Guide", ar: "📖 دليل", ru: "📖 Инфо", es: "📖 Guía", fr: "📖 Guide");
 
         Color accent = showBriefingModal ? new Color(1f, 0.78f, 0.22f) : new Color(0.25f, 0.85f, 0.55f);
         if (EnchantedNatureGUI.DrawOrganicLeafButton(new Rect(x, y, btnW, btnH), btnLabel, accent, 11))
